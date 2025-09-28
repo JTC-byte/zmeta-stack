@@ -3,150 +3,196 @@
 <head>
   <meta charset="utf-8" />
   <title>ZMeta Live Map</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+
+  <!-- Leaflet CSS (with fallback) -->
+  <link id="leaflet-css" rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity=""
+        crossorigin=""/>
   <style>
     html, body, #map { height: 100%; margin: 0; }
     .info {
-      position: absolute;
-      top: 10px; left: 10px;
-      background: #fff;
-      padding: 8px 10px;
-      border-radius: 8px;
-      box-shadow: 0 2px 6px rgba(0,0,0,.2);
-      font: 14px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      z-index: 1000;           /* keep above Leaflet panes */
-      pointer-events: none;    /* don't block map interactions */
+      position: absolute; top:10px; left:10px;
+      background:#fff; padding:8px 10px; border-radius:8px;
+      box-shadow:0 2px 6px rgba(0,0,0,.2);
+      font:14px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      z-index:1000; pointer-events:none;
     }
-    .legend span {
-      display: inline-block; width: 10px; height: 10px;
-      margin-right: 6px; border-radius: 50%;
-    }
+    .legend span { display:inline-block; width:10px; height:10px; margin-right:6px; border-radius:50%; }
   </style>
-
-  <!-- Load Leaflet BEFORE any use of L.* -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 </head>
 <body>
   <div id="map"></div>
 
+  <!-- Leaflet JS (deferred) with fallback -->
+  <script defer>
+    (function ensureLeaflet() {
+      function addScript(src, onload) {
+        const s = document.createElement('script');
+        s.src = src; s.defer = true; s.crossOrigin = '';
+        s.onload = onload;
+        document.head.appendChild(s);
+      }
+      function addCSS(href) {
+        const l = document.createElement('link');
+        l.rel = 'stylesheet'; l.href = href; l.crossOrigin = '';
+        document.head.appendChild(l);
+      }
+      // primary CDN
+      addScript('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', () => {
+        window.__leafletReady = true;
+      });
+      // fallback if primary fails in 2s
+      setTimeout(() => {
+        if (!window.__leafletReady) {
+          console.warn('Leaflet primary CDN failed, using fallback…');
+          addScript('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js', () => {
+            window.__leafletReady = true;
+          });
+          // also ensure CSS exists
+          const el = document.getElementById('leaflet-css');
+          if (!el) addCSS('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css');
+        }
+      }, 2000);
+    })();
+  </script>
+
+  <!-- App code (runs after DOM + after Leaflet loaded) -->
   <script>
-    // --- Map setup ---
-    const map = L.map('map').setView([35.271, -78.637], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap'
-    }).addTo(map);
+    (function startWhenReady(){
+      const start = () => {
+        if (!window.L) { return setTimeout(start, 100); } // wait for Leaflet
+        console.log('Leaflet loaded, starting map…');
 
-    // --- Info control ---
-    const Info = L.Control.extend({
-      onAdd() {
-        const div = L.DomUtil.create('div', 'info');
-        div.innerHTML = `
-          <div><b>ZMeta Live</b></div>
-          <div>WS: <span id="wsStatus">connecting…</span></div>
-          <div>Clients: <span id="cClients">0</span></div>
-          <div>EPS(10s): <span id="cEps10">0</span></div>
-          <div>Last pkt age: <span id="cAge">–</span>s</div>
-          <div class="legend" style="margin-top:6px">
-            <div><span style="background:#007aff"></span>rf</div>
-            <div><span style="background:#ff3b30"></span>thermal</div>
-            <div><span style="background:#34c759"></span>eo</div>
-            <div><span style="background:#ff9500"></span>ir</div>
-            <div><span style="background:#8e8e93"></span>acoustic</div>
-          </div>`;
-        return div;
-      }
-    });
-    new Info({ position: 'topleft' }).addTo(map);
+        // --- Map setup ---
+        const map = L.map('map').setView([35.271, -78.637], 12);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap'
+        }).addTo(map);
 
-    // Now that control is in the DOM, grab the spans
-    const wsStatus = document.getElementById('wsStatus');
-    const elClients = document.getElementById('cClients');
-    const elEps10   = document.getElementById('cEps10');
-    const elAge     = document.getElementById('cAge');
+        // --- Info control ---
+        const Info = L.Control.extend({
+          onAdd() {
+            const div = L.DomUtil.create('div', 'info');
+            div.innerHTML = `
+              <div><b>ZMeta Live</b></div>
+              <div>WS: <span id="wsStatus">connecting…</span></div>
+              <div>Clients: <span id="cClients">0</span></div>
+              <div>EPS(10s): <span id="cEps10">0</span></div>
+              <div>Last pkt age: <span id="cAge">–</span>s</div>
+              <div>Alerts: <span id="cAlerts">0</span></div>
+              <div class="legend" style="margin-top:6px">
+                <div><span style="background:#007aff"></span>rf</div>
+                <div><span style="background:#ff3b30"></span>thermal</div>
+                <div><span style="background:#34c759"></span>eo</div>
+                <div><span style="background:#ff9500"></span>ir</div>
+                <div><span style="background:#8e8e93"></span>acoustic</div>
+              </div>`;
+            return div;
+          }
+        });
+        new Info({ position: 'topleft' }).addTo(map);
 
-    // --- Marker logic ---
-    const modalityColors = {
-      rf: '#007aff', thermal: '#ff3b30', eo: '#34c759', ir: '#ff9500', acoustic: '#8e8e93', default: '#5856d6'
-    };
-    const markers = new Map();   // id -> circleMarker
-    const trails  = new Map();   // id -> array of [lat, lon]
-    const MAX_TRAIL_POINTS = 50;
+        // UI refs
+        const wsStatus = document.getElementById('wsStatus');
+        const elClients = document.getElementById('cClients');
+        const elEps10   = document.getElementById('cEps10');
+        const elAge     = document.getElementById('cAge');
+        const elAlerts  = document.getElementById('cAlerts');
+        let alertCount = 0;
 
-    function getId(z) {
-      return z.tracking_id || z.pid || (z.sensor_id + ':' + (z.data?.type || 'unknown'));
-    }
-    function colorFor(z) {
-      return modalityColors[z.modality] || modalityColors.default;
-    }
+        // --- Markers/trails ---
+        const modalityColors = { rf:'#007aff', thermal:'#ff3b30', eo:'#34c759', ir:'#ff9500', acoustic:'#8e8e93', default:'#5856d6' };
+        const markers = new Map();
+        const trails  = new Map();
+        const MAX_TRAIL_POINTS = 50;
 
-    function upsertFeature(z) {
-      const loc = z.location || {};
-      if (typeof loc.lat !== 'number' || typeof loc.lon !== 'number') return;
+        function getId(z){ return z.tracking_id || z.pid || (z.sensor_id + ':' + (z.data?.type || 'unknown')); }
+        function colorFor(z){ return modalityColors[z.modality] || modalityColors.default; }
 
-      const id = getId(z);
-      const latlng = [loc.lat, loc.lon];
-      const color = colorFor(z);
+        function upsertFeature(z){
+          const loc = z.location || {};
+          if (typeof loc.lat !== 'number' || typeof loc.lon !== 'number') return;
+          const id = getId(z);
+          const latlng = [loc.lat, loc.lon];
+          const color = colorFor(z);
 
-      let m = markers.get(id);
-      if (!m) {
-        m = L.circleMarker(latlng, { radius: 6, color, weight: 2, fillOpacity: 0.6 }).addTo(map);
-        markers.set(id, m);
+          let m = markers.get(id);
+          if (!m){
+            m = L.circleMarker(latlng, { radius:6, color, weight:2, fillOpacity:0.6 }).addTo(map);
+            markers.set(id, m);
+          } else {
+            m.setLatLng(latlng); m.setStyle({ color });
+          }
+
+          const t = trails.get(id) || [];
+          t.push(latlng); if (t.length > MAX_TRAIL_POINTS) t.shift();
+          trails.set(id, t);
+
+          let poly = m._trail;
+          if (!poly){ poly = L.polyline(t, { color, weight:2, opacity:0.6 }).addTo(map); m._trail = poly; }
+          else { poly.setLatLngs(t); poly.setStyle({ color }); }
+
+          const freq = z.data?.value?.frequency_hz;
+          const rssi = z.data?.value?.rssi_dbm;
+          const details = [
+            `id: <b>${id}</b>`,
+            `modality: <b>${z.modality}</b>`,
+            z.timestamp ? `ts: <b>${z.timestamp}</b>` : '',
+            (typeof freq === 'number') ? `freq: <b>${freq}</b>` : '',
+            (typeof rssi === 'number') ? `rssi: <b>${rssi}</b>` : '',
+            (z.confidence != null) ? `conf: <b>${z.confidence}</b>` : ''
+          ].filter(Boolean).join('<br>');
+          m.bindTooltip(details, { direction:'top', opacity:0.9 });
+        }
+
+        function showAlert(a){
+          const color = a.severity === 'crit' ? '#ff3b30' : (a.severity === 'warn' ? '#ff9500' : '#007aff');
+          const lat = a.loc?.lat, lon = a.loc?.lon;
+          if (typeof lat === 'number' && typeof lon === 'number'){
+            const ring = L.circle([lat, lon], { radius:120, color, weight:3, opacity:0.9, fillOpacity:0.1 }).addTo(map);
+            setTimeout(() => map.removeLayer(ring), 4000);
+          }
+          alertCount += 1; elAlerts.textContent = String(alertCount);
+        }
+
+        // --- WebSocket ---
+        const ws = new WebSocket(
+  (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'
+);
+
+        ws.onopen = () => { wsStatus.textContent = "connected"; console.log("WS connected"); };
+        ws.onclose = () => { wsStatus.textContent = "closed"; };
+        ws.onerror = (e) => { wsStatus.textContent = "error"; console.warn("WS error", e); };
+        ws.onmessage = (evt) => {
+          try {
+            const msg = JSON.parse(evt.data);
+            if (msg && msg.type === 'alert') showAlert(msg);
+            else if (msg && msg.location)   upsertFeature(msg);
+          } catch {}
+        };
+
+        // --- Health poller (2s) ---
+        async function pollHealth(){
+          try {
+            const r = await fetch('/healthz');
+            const j = await r.json();
+            elClients.textContent = j.clients ?? '0';
+            elEps10.textContent   = j.eps_10s ?? '0';
+            elAge.textContent     = (j.last_packet_age_s ?? '–');
+            elAlerts.textContent  = j.alerts_total ?? '0';
+          } catch (e) {
+            // CORS/network issues are fine; map still works
+          }
+        }
+        pollHealth(); setInterval(pollHealth, 2000);
+      };
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start);
       } else {
-        m.setLatLng(latlng);
-        m.setStyle({ color });
+        start();
       }
-
-      const t = trails.get(id) || [];
-      t.push(latlng);
-      if (t.length > MAX_TRAIL_POINTS) t.shift();
-      trails.set(id, t);
-
-      let poly = m._trail;
-      if (!poly) {
-        poly = L.polyline(t, { color, weight: 2, opacity: 0.6 }).addTo(map);
-        m._trail = poly;
-      } else {
-        poly.setLatLngs(t);
-        poly.setStyle({ color });
-      }
-
-      const freq = z.data?.value?.frequency_hz;
-      const rssi = z.data?.value?.rssi_dbm;
-      const details = [
-        `id: <b>${id}</b>`,
-        `modality: <b>${z.modality}</b>`,
-        z.timestamp ? `ts: <b>${z.timestamp}</b>` : '',
-        (typeof freq === 'number') ? `freq: <b>${freq}</b>` : '',
-        (typeof rssi === 'number') ? `rssi: <b>${rssi}</b>` : '',
-        (z.confidence != null) ? `conf: <b>${z.confidence}</b>` : ''
-      ].filter(Boolean).join('<br>');
-        m.bindTooltip(details, { direction: 'top', opacity: 0.9 });
-    }
-
-    // --- WebSocket hookup ---
-    const ws = new WebSocket("ws://127.0.0.1:8000/ws");
-    ws.onopen = () => wsStatus.textContent = "connected";
-    ws.onclose = () => wsStatus.textContent = "closed";
-    ws.onerror = () => wsStatus.textContent = "error";
-    ws.onmessage = (evt) => {
-      try {
-        const z = JSON.parse(evt.data);   // ignore non-JSON welcome/echo strings
-        if (z && z.location) upsertFeature(z);
-      } catch (e) {}
-    };
-
-    // --- Health poller (every 2s) ---
-    async function pollHealth() {
-      try {
-        const r = await fetch('http://127.0.0.1:8000/healthz');
-        const j = await r.json();
-        elClients.textContent = j.clients ?? '0';
-        elEps10.textContent   = j.eps_10s ?? '0';
-        elAge.textContent     = (j.last_packet_age_s ?? '–');
-      } catch (_) { /* ignore */ }
-    }
-    pollHealth();
-    setInterval(pollHealth, 2000);
+    })();
   </script>
 </body>
 </html>
