@@ -4,3 +4,4 @@ pydantic[dotenv]
 websockets
 pytest
 python-dotenv
+requests
