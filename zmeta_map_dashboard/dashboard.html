@@ -1,0 +1,69 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Z-ISR Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Leaflet CSS (no integrity) -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+  />
+  <style>
+    html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <!-- Leaflet JS (no integrity) -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
+  ></script>
+  <script>
+    const map = L.map("map").setView([35.271, -78.637], 15);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: 'Map data © <a href="https://openstreetmap.org">OpenStreetMap</a>',
+    }).addTo(map);
+
+    const markers = {};
+
+    async function fetchData() {
+      const res = await fetch("/packets");
+      const packets = await res.json();
+
+      packets.forEach((pkt) => {
+        const { sensor_id, location, modality } = pkt;
+        const key = sensor_id;
+
+        if (!location || !location.lat || !location.lon) return;
+
+        const latlng = [location.lat, location.lon];
+
+        if (markers[key]) {
+          markers[key].setLatLng(latlng);
+        } else {
+          const marker = L.circleMarker(latlng, {
+            radius: 8,
+            color: modality === "thermal" ? "red" :
+                   modality === "rf" ? "blue" :
+                   modality === "acoustic" ? "green" : "gray",
+            fillOpacity: 0.5,
+          }).addTo(map);
+          marker.bindPopup(`<b>${sensor_id}</b><br>${modality}`);
+          markers[key] = marker;
+        }
+      });
+    }
+
+    setInterval(fetchData, 1000);
+  </script>
+</body>
+</html>
