@@ -47,3 +47,23 @@ class NDJSONRecorder:
                 self._fh.close()
             self._hour_key = key
             path = self.base_dir / f"{key}.ndjson"
+            self._fh = path.open("a", encoding="utf-8", buffering=1)  # line buffered
+
+    async def _run(self):
+        while True:
+            line = await self.queue.get()
+            now = datetime.now(timezone.utc)
+            self._rollover_if_needed(now)
+            try:
+                self._fh.write(line)
+                if not line.endswith("\n"):
+                    self._fh.write("\n")
+                self.total_written += 1
+            except Exception:
+                # keep pipeline alive on write errors
+                pass
+            finally:
+                self.queue.task_done()
+
+# Singleton instance that main.py imports
+recorder = NDJSONRecorder()
