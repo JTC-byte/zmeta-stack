@@ -16,9 +16,13 @@
 </head>
 <body>
   <div id="map"></div>
+
   <div class="info" id="info">
     <div><b>ZMeta Live</b></div>
     <div>WS: <span id="wsStatus">connecting…</span></div>
+    <div>Clients: <span id="cClients">0</span></div>
+    <div>EPS(10s): <span id="cEps10">0</span></div>
+    <div>Last pkt age: <span id="cAge">–</span>s</div>
     <div class="legend" style="margin-top:6px">
       <div><span style="background:#007aff"></span>rf</div>
       <div><span style="background:#ff3b30"></span>thermal</div>
@@ -45,6 +49,9 @@
     const MAX_TRAIL_POINTS = 50;
 
     const wsStatus = document.getElementById('wsStatus');
+    const elClients = document.getElementById('cClients');
+    const elEps10   = document.getElementById('cEps10');
+    const elAge     = document.getElementById('cAge');
 
     function getId(z) {
       return z.tracking_id || z.pid || (z.sensor_id + ':' + (z.data?.type || 'unknown'));
@@ -111,6 +118,19 @@
         if (z && z.location) upsertFeature(z);
       } catch (e) {}
     };
+
+    // --- Health poller (every 2s) ---
+    async function pollHealth() {
+      try {
+        const r = await fetch('http://127.0.0.1:8000/healthz');
+        const j = await r.json();
+        elClients.textContent = j.clients ?? '0';
+        elEps10.textContent   = j.eps_10s ?? '0';
+        elAge.textContent     = (j.last_packet_age_s ?? '–');
+      } catch (_) { /* ignore */ }
+    }
+    pollHealth();
+    setInterval(pollHealth, 2000);
   </script>
 </body>
 </html>
