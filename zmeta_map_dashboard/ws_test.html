@@ -1,0 +1,16 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>WS Echo Test</title>
+<h1>WebSocket Echo</h1>
+<input id="msg" placeholder="type and press Enter" autofocus />
+<pre id="log"></pre>
+<script>
+  const log = (m)=>document.getElementById('log').textContent += m + "\n";
+  const ws = new WebSocket("ws://127.0.0.1:8000/ws");
+  ws.onopen = () => log("connected");
+  ws.onmessage = (e) => log("<< " + e.data);
+  ws.onclose = () => log("closed");
+  document.getElementById('msg').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { ws.send(e.target.value); log(">> " + e.target.value); e.target.value=""; }
+  });
+</script>
