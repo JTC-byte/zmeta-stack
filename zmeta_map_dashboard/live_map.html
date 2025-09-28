@@ -36,7 +36,7 @@
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    // --- Info control (added AFTER map exists) ---
+    // --- Info control ---
     const Info = L.Control.extend({
       onAdd() {
         const div = L.DomUtil.create('div', 'info');
@@ -120,7 +120,7 @@
         (typeof rssi === 'number') ? `rssi: <b>${rssi}</b>` : '',
         (z.confidence != null) ? `conf: <b>${z.confidence}</b>` : ''
       ].filter(Boolean).join('<br>');
-      m.bindTooltip(details, { direction: 'top', opacity: 0.9 });
+        m.bindTooltip(details, { direction: 'top', opacity: 0.9 });
     }
 
     // --- WebSocket hookup ---

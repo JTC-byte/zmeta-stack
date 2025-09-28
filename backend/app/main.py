@@ -8,6 +8,9 @@ from pydantic import ValidationError
 # Reuse your existing strict schema at repo root
 from z_meta_schema import ZMeta
 
+# Recorder (new)
+from tools.recorder import recorder
+
 app = FastAPI(title="ZMeta Backend")
 
 # ----------------- WebSocket hub -----------------
@@ -96,67 +99,4 @@ async def websocket_endpoint(websocket: WebSocket):
             # optional echo for manual testing
             await websocket.send_text(f"Echo: {data}")
     except WebSocketDisconnect:
-        hub.disconnect(websocket)
-    except Exception:
-        hub.disconnect(websocket)
-
-@app.post("/ingest")
-async def ingest(payload: dict):
-    try:
-        z = ZMeta.model_validate(payload)  # strict validation
-    except ValidationError as ve:
-        raise HTTPException(status_code=422, detail=ve.errors())
-    await hub.broadcast_text(z.model_dump_json())
-    stats.note_validated()
-    return {"ok": True, "broadcast_to": len(hub.clients)}
-
-# ----------------- UDP ingest (port 5005) -----------------
-class UDPProtocol(asyncio.DatagramProtocol):
-    def __init__(self, queue: asyncio.Queue):
-        self.queue = queue
-
-    def datagram_received(self, data: bytes, addr):
-        stats.note_received()
-        try:
-            text = data.decode("utf-8", errors="ignore").strip()
-            if text:
-                self.queue.put_nowait(text)
-        except Exception:
-            pass
-
-async def udp_consumer(queue: asyncio.Queue):
-    while True:
-        raw = await queue.get()
-        try:
-            payload = json.loads(raw)
-            z = ZMeta.model_validate(payload)
-            await hub.broadcast_text(z.model_dump_json())
-            stats.note_validated()
-        except Exception:
-            stats.note_dropped()
-        finally:
-            queue.task_done()
-
-@app.on_event("startup")
-async def startup():
-    app.state.udp_queue = asyncio.Queue(maxsize=4096)
-    loop = asyncio.get_running_loop()
-    transport, _ = await loop.create_datagram_endpoint(
-        lambda: UDPProtocol(app.state.udp_queue),
-        local_addr=("0.0.0.0", 5005)
-    )
-    app.state.udp_transport = transport
-    app.state.udp_consumer_task = asyncio.create_task(udp_consumer(app.state.udp_queue))
-
-@app.on_event("shutdown")
-async def shutdown():
-    transport: Optional[asyncio.transports.DatagramTransport] = getattr(app.state, "udp_transport", None)
-    if transport is not None:
-        transport.close()
-    task: Optional[asyncio.Task] = getattr(app.state, "udp_consumer_task", None)
-    if task:
-        task.cancel()
-        try:
-            await task
-        except Exception:
-            pass
+        hub.d
