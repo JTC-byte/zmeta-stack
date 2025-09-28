@@ -7,32 +7,28 @@
   <style>
     html, body, #map { height: 100%; margin: 0; }
     .info {
-      position:absolute; top:10px; left:10px; background:#fff; padding:8px 10px;
-      border-radius:8px; box-shadow:0 2px 6px rgba(0,0,0,.2);
+      position: absolute;
+      top: 10px; left: 10px;
+      background: #fff;
+      padding: 8px 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,.2);
       font: 14px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      z-index: 1000;           /* keep above Leaflet panes */
+      pointer-events: none;    /* don't block map interactions */
     }
-    .legend span { display:inline-block; width:10px; height:10px; margin-right:6px; border-radius:50%; }
+    .legend span {
+      display: inline-block; width: 10px; height: 10px;
+      margin-right: 6px; border-radius: 50%;
+    }
   </style>
+
+  <!-- Load Leaflet BEFORE any use of L.* -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 </head>
 <body>
   <div id="map"></div>
 
-  <div class="info" id="info">
-    <div><b>ZMeta Live</b></div>
-    <div>WS: <span id="wsStatus">connecting…</span></div>
-    <div>Clients: <span id="cClients">0</span></div>
-    <div>EPS(10s): <span id="cEps10">0</span></div>
-    <div>Last pkt age: <span id="cAge">–</span>s</div>
-    <div class="legend" style="margin-top:6px">
-      <div><span style="background:#007aff"></span>rf</div>
-      <div><span style="background:#ff3b30"></span>thermal</div>
-      <div><span style="background:#34c759"></span>eo</div>
-      <div><span style="background:#ff9500"></span>ir</div>
-      <div><span style="background:#8e8e93"></span>acoustic</div>
-    </div>
-  </div>
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script>
     // --- Map setup ---
     const map = L.map('map').setView([35.271, -78.637], 12);
@@ -40,18 +36,41 @@
       attribution: '© OpenStreetMap'
     }).addTo(map);
 
-    const modalityColors = {
-      rf: '#007aff', thermal: '#ff3b30', eo: '#34c759', ir: '#ff9500', acoustic: '#8e8e93', default: '#5856d6'
-    };
+    // --- Info control (added AFTER map exists) ---
+    const Info = L.Control.extend({
+      onAdd() {
+        const div = L.DomUtil.create('div', 'info');
+        div.innerHTML = `
+          <div><b>ZMeta Live</b></div>
+          <div>WS: <span id="wsStatus">connecting…</span></div>
+          <div>Clients: <span id="cClients">0</span></div>
+          <div>EPS(10s): <span id="cEps10">0</span></div>
+          <div>Last pkt age: <span id="cAge">–</span>s</div>
+          <div class="legend" style="margin-top:6px">
+            <div><span style="background:#007aff"></span>rf</div>
+            <div><span style="background:#ff3b30"></span>thermal</div>
+            <div><span style="background:#34c759"></span>eo</div>
+            <div><span style="background:#ff9500"></span>ir</div>
+            <div><span style="background:#8e8e93"></span>acoustic</div>
+          </div>`;
+        return div;
+      }
+    });
+    new Info({ position: 'topleft' }).addTo(map);
 
-    const markers = new Map();   // id -> circleMarker
-    const trails  = new Map();   // id -> array of [lat, lon]
-    const MAX_TRAIL_POINTS = 50;
-
+    // Now that control is in the DOM, grab the spans
     const wsStatus = document.getElementById('wsStatus');
     const elClients = document.getElementById('cClients');
     const elEps10   = document.getElementById('cEps10');
     const elAge     = document.getElementById('cAge');
+
+    // --- Marker logic ---
+    const modalityColors = {
+      rf: '#007aff', thermal: '#ff3b30', eo: '#34c759', ir: '#ff9500', acoustic: '#8e8e93', default: '#5856d6'
+    };
+    const markers = new Map();   // id -> circleMarker
+    const trails  = new Map();   // id -> array of [lat, lon]
+    const MAX_TRAIL_POINTS = 50;
 
     function getId(z) {
       return z.tracking_id || z.pid || (z.sensor_id + ':' + (z.data?.type || 'unknown'));
@@ -68,7 +87,6 @@
       const latlng = [loc.lat, loc.lon];
       const color = colorFor(z);
 
-      // add/update marker
       let m = markers.get(id);
       if (!m) {
         m = L.circleMarker(latlng, { radius: 6, color, weight: 2, fillOpacity: 0.6 }).addTo(map);
@@ -78,7 +96,6 @@
         m.setStyle({ color });
       }
 
-      // keep a short trail
       const t = trails.get(id) || [];
       t.push(latlng);
       if (t.length > MAX_TRAIL_POINTS) t.shift();
@@ -93,7 +110,6 @@
         poly.setStyle({ color });
       }
 
-      // tooltip with details
       const freq = z.data?.value?.frequency_hz;
       const rssi = z.data?.value?.rssi_dbm;
       const details = [
