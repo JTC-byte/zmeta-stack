@@ -8,6 +8,7 @@ from datetime import datetime, date, timezone
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from pydantic import ValidationError
 
 from z_meta_schema import ZMeta
@@ -23,7 +24,7 @@ app = FastAPI(title="ZMeta Backend")
 # Serve the dashboard folder (open /ui/live_map.html or /ui/ws_test.html)
 app.mount("/ui", StaticFiles(directory="zmeta_map_dashboard", html=True), name="ui")
 
-# CORS (keep wide-open for dev; restrict later if you prefer)
+# CORS (dev-wide; restrict later if needed)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -153,8 +154,13 @@ def _validate_or_adapt(payload: dict) -> ZMeta:
 # -----------------------------------------------------------------------------
 # Routes
 # -----------------------------------------------------------------------------
-@app.get("/")
-async def root():
+@app.get("/", include_in_schema=False)
+def home_redirect():
+    # Open the dashboard by default
+    return RedirectResponse(url="/ui/live_map.html", status_code=307)
+
+@app.get("/api")
+def api_root():
     return {"status": "ZMeta Backend running", "clients": len(hub.clients)}
 
 @app.get("/healthz")
@@ -290,6 +296,11 @@ async def startup():
     )
     app.state.udp_transport = transport
     app.state.udp_consumer_task = asyncio.create_task(udp_consumer(app.state.udp_queue))
+
+    # Helpful links
+    print("\n📍 Live map:  http://127.0.0.1:8000/ui/live_map.html")
+    print("🧪 WS test:   http://127.0.0.1:8000/ui/ws_test.html")
+    print("❤️ Health:    http://127.0.0.1:8000/healthz\n")
 
 @app.on_event("shutdown")
 async def shutdown():

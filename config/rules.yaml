@@ -1,0 +1,38 @@
+rules:
+  - name: rf_915_band
+    enabled: true
+    severity: warn
+    message: "RF in ISM 915 MHz band"
+    conditions:
+      - field: "modality"
+        in: ["rf"]
+      - field: "data.value.frequency_hz"
+        between: [902000000, 928000000]
+
+  - name: inside_bbox_aoi
+    enabled: true
+    severity: info
+    message: "Inside AOI bbox"
+    conditions:
+      - field: "location.lat"
+        between: [35.0, 36.0]
+      - field: "location.lon"
+        between: [-79.0, -78.0]
+
+  - name: strong_signal
+    enabled: true
+    severity: crit
+    message: "Strong RF power (>= -50 dBm)"
+    conditions:
+      - field: "data.value.rssi_dbm"
+        gte: -50
+
+  - name: high_conf_rf
+    enabled: true
+    severity: info
+    message: "High-confidence RF"
+    conditions:
+      - field: "modality"
+        in: ["rf"]
+      - field: "confidence"
+        gte: 0.9

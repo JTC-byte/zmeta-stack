@@ -5,3 +5,5 @@ websockets
 pytest
 python-dotenv
 requests
+pyyaml
+pyyaml
