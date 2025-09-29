@@ -26,8 +26,15 @@ python -m venv .venv
 pip install -r requirements.txt
 
 # run the backend (prints handy links)
-uvicorn backend.app.main:app --reload
-```
+python -m uvicorn backend.app.main:app --reload
+
+
+> **Windows:** Each new terminal starts without the venv.
+> Reactivate before running:
+> ```powershell
+> .\.venv\Scripts\Activate.ps1
+> python -m uvicorn backend.app.main:app --reload
+> ```
 
 Open the map: **http://127.0.0.1:8000**  
 (redirects to `/ui/live_map.html`)
@@ -71,7 +78,7 @@ cd zmeta-stack
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn backend.app.main:app --reload
+python -m uvicorn backend.app.main:app --reload
 # open http://127.0.0.1:8000
 # then run:  python simulated_rf_broadcaster.py   (before cleanup)
 # or:        python -m tools.simulators.rf        (after cleanup)
@@ -218,7 +225,7 @@ tests/test_klv_translation.py
 
 - Start server:
   ```
-  uvicorn backend.app.main:app --reload
+    python -m uvicorn backend.app.main:app --reload
   ```
 - Open:
   ```
