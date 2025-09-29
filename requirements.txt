@@ -1,9 +1,17 @@
+# ZMeta Stack requirements (runtime + dev/QA)
+# --- Runtime ---
 fastapi
-uvicorn
-pydantic[dotenv]
-websockets
-pytest
-python-dotenv
-requests
-pyyaml
-pyyaml
+uvicorn[standard]
+pydantic>=2
+pyyaml>=6
+websockets>=12
+requests>=2
+python-dotenv>=1
+
+# --- Dev/QA (optional) ---
+pytest>=7
+black>=24
+ruff>=0.5
+mypy>=1.10
+types-requests>=2
+types-PyYAML>=6
