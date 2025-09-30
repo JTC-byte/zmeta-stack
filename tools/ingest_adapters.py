@@ -1,6 +1,6 @@
 # tools/ingest_adapters.py
 from __future__ import annotations
-from typing import Any, Dict, Optional
+from typing import Optional, Dict, Any
 
 def _get(d: Dict[str, Any], path: str, default=None):
     cur = d
@@ -113,7 +113,7 @@ def adapt_klv_like(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not any(k in p for k in ("targetLatitude", "targetLongitude", "sensorType", "platformHeading")):
         return None
     try:
-        from klv_to_zmeta import klv_to_zmeta  # your existing converter
+        from tools.translators.klv_to_zmeta import klv_to_zmeta
         z = klv_to_zmeta(p)
         return z.model_dump()
     except Exception:

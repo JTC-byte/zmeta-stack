@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from pydantic import ValidationError
 
-from z_meta_schema import ZMeta
+from schemas.zmeta import ZMeta
 from tools.recorder import recorder
 from tools.rules import rules
 from tools.ingest_adapters import adapt_to_zmeta
@@ -158,6 +158,11 @@ def _validate_or_adapt(payload: dict) -> ZMeta:
 def home_redirect():
     # Open the dashboard by default
     return RedirectResponse(url="/ui/live_map.html", status_code=307)
+
+# Alias classic /favicon.ico to our UI favicon
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon_redirect():
+    return RedirectResponse(url="/ui/favicon.svg")
 
 @app.get("/api")
 def api_root():

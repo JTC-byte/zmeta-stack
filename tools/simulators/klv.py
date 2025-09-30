@@ -3,7 +3,7 @@ import json
 import time
 import random
 from datetime import datetime, timezone
-from z_meta_schema import ZMeta, Location, Orientation, SensorData
+from schemas.zmeta import ZMeta, Location, Orientation, SensorData
 
 # UDP config
 UDP_IP = "127.0.0.1"

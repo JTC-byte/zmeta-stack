@@ -1,4 +1,4 @@
-from z_meta_schema import ZMeta
+from schemas.zmeta import ZMeta
 from datetime import datetime
 from typing import Dict, Any
 from pydantic import ValidationError
