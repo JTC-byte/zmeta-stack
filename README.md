@@ -66,8 +66,14 @@ python -m tools.simulators.thermal
 .\.venv\Scripts\Activate.ps1
 python -m tools.simulators.klv
 ```
+**D) GUI control panel (module run)**
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m tools.gui_app
+```
 
-**D) Single REST packet (PowerShell)**
+
+**E) Single REST packet (PowerShell)**
 ```powershell
 $body = @{
   sensor_id="rf_sim_001"; modality="rf"; timestamp="2025-01-01T00:00:00Z"
