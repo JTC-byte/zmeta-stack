@@ -298,5 +298,19 @@ pip-compile --upgrade --generate-hashes -o requirements.lock.txt requirements.tx
 \n## Replay recorded data\n\n- bash: \scripts/replay.sh data/records/20250101_12.ndjson http://127.0.0.1:8000\\n- PowerShell: \scripts/replay.ps1 -Path data/records/20250101_12.ndjson -BaseUrl http://127.0.0.1:8000\\n\n
 \n## Containers\n\n- Build locally: \docker build -t zmeta .\\n- Dev compose: \docker-compose up\ (hot reload on port 8000).\n\n
 
+---
+
+## 🚧 Future Updates
+
+Here’s what’s coming soon, in order of priority:
+
+1. **Phone Tracker Integration** – ingest mobile device location feeds into ZMeta for live map display and alerting.
+2. **GUI Auth Support** – input field for shared-secret, secure header/query handling in the control panel and dashboard.
+3. **Expanded Health Dashboard** – parsed metrics for adapter counts, WebSocket queue drops, and per-client stats (beyond raw JSON).
+4. **Rules Management UI** – list, add, and reload detection rules directly from the GUI instead of YAML-only workflows.
+5. **Electron/Tauri Frontend** – TypeScript/React interface packaged as a cross-platform desktop app (with built-in map, health, and rules pages).
+6. **Enhanced Visualization** – richer map features (track trails, clustering, severity color-coding) and live metrics charts.
+
+
 
 
