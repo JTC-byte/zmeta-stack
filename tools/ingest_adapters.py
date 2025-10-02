@@ -1,6 +1,6 @@
-﻿'# tools/ingest_adapters.py
+﻿# tools/ingest_adapters.py
 """Adapter registry used by the backend to coerce upstream payloads into ZMeta."""
-'
+
 from __future__ import annotations
 from typing import Optional, Dict, Any, Callable, Tuple, List
 
@@ -8,7 +8,7 @@ SCHEMA_VERSION = "1.0"
 
 def _get(d: Dict[str, Any], path: str, default=None):
     cur = d
-    for part in path.split("."):
+    for part in path.split('.'):
         if not isinstance(cur, dict) or part not in cur:
             return default
         cur = cur[part]
@@ -19,7 +19,6 @@ def _copy_loc(p: Dict[str, Any]) -> Dict[str, Any]:
     return {"lat": loc.get("lat"), "lon": loc.get("lon"), "alt": loc.get("alt")}
 
 def _top_conf(p: Dict[str, Any]) -> Optional[float]:
-    # Prefer top-level confidence; if missing, lift data.confidence
     if isinstance(p.get("confidence"), (int, float)):
         return float(p["confidence"])
     dc = _get(p, "data.confidence")
@@ -27,8 +26,8 @@ def _top_conf(p: Dict[str, Any]) -> Optional[float]:
         return float(dc)
     return None
 
-# --- Simulated RF (MHz) -> ZMeta rf_detection (Hz) --------------------------
 def adapt_simulated_v1_rf(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Normalize the v1 RF simulator schema into canonical `rf_detection` ZMeta."""
     src = (p.get("source_format") or "").lower()
     modality = (p.get("modality") or "").lower()
     dtype = _get(p, "data.type")
@@ -75,8 +74,8 @@ def adapt_simulated_v1_rf(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
 
     return out
 
-# --- Simulated Thermal -> ZMeta thermal_hotspot -----------------------------
 def adapt_simulated_v1_thermal(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Normalize thermal simulator payloads into `thermal_hotspot` ZMeta."""
     src = (p.get("source_format") or "").lower()
     modality = (p.get("modality") or "").lower()
     dtype = _get(p, "data.type")
@@ -113,8 +112,8 @@ def adapt_simulated_v1_thermal(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         "schema_version": SCHEMA_VERSION,
     }
 
-# --- KLV-like dict -> ZMeta via your translator -----------------------------
 def adapt_klv_like(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Bridge generic KLV dicts into ZMeta using the shared translator."""
     if not any(k in p for k in ("targetLatitude", "targetLongitude", "sensorType", "platformHeading")):
         return None
     try:
@@ -126,7 +125,6 @@ def adapt_klv_like(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     except Exception:
         return None
 
-# --- Entry point -------------------------------------------------------------
 ADAPTERS: List[Tuple[str, Callable[[Dict[str, Any]], Optional[Dict[str, Any]]]]] = [
     ("simulated_v1_rf", adapt_simulated_v1_rf),
     ("simulated_v1_thermal", adapt_simulated_v1_thermal),
@@ -140,7 +138,3 @@ def adapt_to_zmeta(payload: Dict[str, Any]) -> Optional[Tuple[str, Dict[str, Any
             out.setdefault("schema_version", SCHEMA_VERSION)
             return name, out
     return None
-
-
-
-

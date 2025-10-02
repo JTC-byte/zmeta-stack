@@ -186,6 +186,7 @@ class ZMetaApp(ttk.Frame):
         self.ws_status_var = tk.StringVar(value="disconnected")
         self.health_status_var = tk.StringVar(value="never")
         self.last_health_var = tk.StringVar(value="")
+        self.secret_var = tk.StringVar(value="")
 
         self.tracks: dict[str, dict[str, Any]] = {}
         self.track_history: dict[str, list[tuple[float, float]]] = {}
@@ -212,19 +213,23 @@ class ZMetaApp(ttk.Frame):
 
         top = ttk.Frame(self)
         top.grid(row=0, column=0, sticky="ew")
-        for c in range(7):
-            top.columnconfigure(c, weight=1 if c == 1 else 0)
+        for c in range(9):
+            top.columnconfigure(c, weight=1 if c in (1, 3) else 0)
 
         ttk.Label(top, text="Base URL:").grid(row=0, column=0, padx=(0, 6))
         entry = ttk.Entry(top, textvariable=self.base_url_var)
         entry.grid(row=0, column=1, sticky="ew")
         entry.focus_set()
 
-        ttk.Button(top, text="Refresh Health", command=lambda: self.fetch_health()).grid(row=0, column=2, padx=6)
-        ttk.Button(top, text="Connect WS", command=lambda: self.connect_ws()).grid(row=0, column=3)
-        ttk.Button(top, text="Disconnect", command=lambda: self.disconnect_ws()).grid(row=0, column=4, padx=(6, 0))
-        ttk.Label(top, text="WS:").grid(row=0, column=5, padx=(12, 4))
-        ttk.Label(top, textvariable=self.ws_status_var).grid(row=0, column=6, sticky="w")
+        ttk.Label(top, text="Secret:").grid(row=0, column=2, padx=(6, 6))
+        secret_entry = ttk.Entry(top, textvariable=self.secret_var, show="*")
+        secret_entry.grid(row=0, column=3, sticky="ew")
+
+        ttk.Button(top, text="Refresh Health", command=lambda: self.fetch_health()).grid(row=0, column=4, padx=6)
+        ttk.Button(top, text="Connect WS", command=lambda: self.connect_ws()).grid(row=0, column=5)
+        ttk.Button(top, text="Disconnect", command=lambda: self.disconnect_ws()).grid(row=0, column=6, padx=(6, 0))
+        ttk.Label(top, text="WS:").grid(row=0, column=7, padx=(12, 4))
+        ttk.Label(top, textvariable=self.ws_status_var).grid(row=0, column=8, sticky="w")
 
         health_frame = ttk.LabelFrame(self, text="Health")
         health_frame.grid(row=1, column=0, sticky="nsew", pady=(10, 0))
@@ -523,18 +528,19 @@ class ZMetaApp(ttk.Frame):
         url = self._base_url() + "/healthz"
         self.health_status_var.set("loading")
         self.last_health_var.set("")
-        self.loop_thread.create_task(self._fetch_health_async(url))
+        headers = self._auth_headers()
+        self.loop_thread.create_task(self._fetch_health_async(url, headers))
 
-    async def _fetch_health_async(self, url: str) -> None:
+    async def _fetch_health_async(self, url: str, headers: dict[str, str]) -> None:
         try:
-            data = await asyncio.to_thread(self._get_json, url)
+            data = await asyncio.to_thread(self._get_json, url, headers)
             self.queue.put(("health", data))
         except Exception as exc:  # pragma: no cover - surface to UI
             self.queue.put(("health_error", str(exc)))
 
     @staticmethod
-    def _get_json(url: str) -> dict[str, Any]:
-        resp = requests.get(url, timeout=5)
+    def _get_json(url: str, headers: dict[str, str]) -> dict[str, Any]:
+        resp = requests.get(url, headers=headers or None, timeout=5)
         resp.raise_for_status()
         return resp.json()
 
@@ -558,6 +564,12 @@ class ZMetaApp(ttk.Frame):
     # ------------------------------------------------------------------
     def _base_url(self) -> str:
         return self.base_url_var.get().rstrip("/")
+
+    def _auth_headers(self) -> dict[str, str]:
+        secret = self.secret_var.get().strip()
+        if not secret:
+            return {}
+        return {'X-ZMeta-Secret': secret}
 
     def _ws_url(self) -> str:
         base = self._base_url()

@@ -105,11 +105,15 @@ class WSHub:
     def __init__(self):
         self._clients: dict[WebSocket, WSClient] = {}
 
+    @property
+    def clients(self) -> dict[WebSocket, WSClient]:
+        return self._clients
+
     async def connect(self, ws: WebSocket):
         await ws.accept()
         queue: asyncio.Queue[str] = asyncio.Queue(maxsize=WS_QUEUE_MAX)
         sender = asyncio.create_task(self._sender(ws, queue))
-        self._clients[ws] = WSClient(ws=ws, queue=queue, sender=sender)
+        self._clients[ws] = WSClient(websocket=ws, queue=queue, sender=sender)
 
     async def disconnect(self, ws: WebSocket, *, cancel_sender: bool = True):
         client = self._clients.pop(ws, None)
@@ -213,9 +217,41 @@ class Stats:
 
 stats = Stats()
 
+class AlertDeduper:
+    """Short-window dedupe to avoid spamming identical alerts."""
+
+    def __init__(self, ttl_s: float = 3.0, max_keys: int = 10000):
+        self.ttl = ttl_s
+        self.max = max_keys
+        self._seen: dict[str, float] = {}
+        self.total_checked = 0
+        self.total_suppressed = 0
+
+    def _key(self, a: dict) -> str:
+        lat = a.get("loc", {}).get("lat")
+        lon = a.get("loc", {}).get("lon")
+        if isinstance(lat, (int, float)):
+            lat = round(float(lat), 4)
+        if isinstance(lon, (int, float)):
+            lon = round(float(lon), 4)
+        return f"{a.get(rule)}|{a.get(sensor_id)}|{a.get(severity)}|{lat},{lon}"
+
+    def should_send(self, a: dict) -> bool:
+        self.total_checked += 1
+        now = time.time()
+        k = self._key(a)
+        ts = self._seen.get(k)
+        if ts is not None and (now - ts) < self.ttl:
+            self.total_suppressed += 1
+            return False
+        self._seen[k] = now
+        if len(self._seen) > self.max:
+            cutoff = now - self.ttl
+            self._seen = {k: t for k, t in self._seen.items() if t >= cutoff}
+        return True
+
     def metrics(self) -> dict[str, float]:
         return {"ttl_s": self.ttl, "checked_total": self.total_checked, "suppressed_total": self.total_suppressed}
-
 
 deduper = AlertDeduper(ttl_s=3.0)
 
@@ -361,37 +397,42 @@ class UDPProtocol(asyncio.DatagramProtocol):
             pass
 
 async def udp_consumer(q: asyncio.Queue):
-    while True:
-        raw = await q.get()
-        try:
-            payload = json.loads(raw)
+    try:
+        while True:
+            raw = await q.get()
             try:
-                z = _validate_or_adapt(payload)
-            except ValidationError:
-                stats.note_dropped()
-                continue
+                payload = json.loads(raw)
+                try:
+                    z = _validate_or_adapt(payload)
+                except ValidationError:
+                    stats.note_dropped()
+                    continue
 
-            data_json = z.model_dump_json()
-            data_dict = z.model_dump()
+                data_json = z.model_dump_json()
+                data_dict = z.model_dump()
 
-            await hub.broadcast_text(data_json)
-            await recorder.enqueue(data_json)
-            stats.note_validated()
+                await hub.broadcast_text(data_json)
+                await recorder.enqueue(data_json)
+                stats.note_validated()
 
-            try:
-                alerts = rules.apply(data_dict)
+                try:
+                    alerts = rules.apply(data_dict)
+                except Exception:
+                    log.exception('rules.apply failed (udp)')
+                    alerts = []
+                for alert in alerts:
+                    if deduper.should_send(alert):
+                        await hub.broadcast_text(_dumps(alert))
+                        stats.note_alert()
+
             except Exception:
-                log.exception("rules.apply failed (udp)")
-                alerts = []
-            for alert in alerts:
-                if deduper.should_send(alert):
-                    await hub.broadcast_text(_dumps(alert))
-                    stats.note_alert()
+                stats.note_dropped()
+            finally:
+                q.task_done()
+    except asyncio.CancelledError:
+        pass
 
-        except Exception:
-            stats.note_dropped()
-        finally:
-            q.task_done()
+
 
 # -----------------------------------------------------------------------------
 # Lifecycle
@@ -428,6 +469,8 @@ async def shutdown():
         task.cancel()
         try:
             await task
+        except asyncio.CancelledError:
+            pass
         except Exception:
             pass
     await recorder.stop()

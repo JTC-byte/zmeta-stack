@@ -1,4 +1,6 @@
-﻿"""Translate KLV dictionaries into ZMeta events."""\n\nfrom schemas.zmeta import ZMeta
+﻿"""Translate KLV dictionaries into ZMeta events."""
+
+from schemas.zmeta import ZMeta
 from datetime import datetime, timezone
 from typing import Dict, Any
 from pydantic import ValidationError
@@ -6,10 +8,7 @@ from pydantic import ValidationError
 SCHEMA_VERSION = "1.0"
 
 def klv_to_zmeta(klv_dict: Dict[str, Any]) -> ZMeta:
-    """
-    Converts a KLV-style metadata dictionary into a ZMeta object.
-    Handles missing values gracefully and fills sensible defaults.
-    """
+    """Converts a KLV-style metadata dictionary into a ZMeta object."""
 
     try:
         zmeta_dict = {
@@ -53,4 +52,3 @@ def klv_to_zmeta(klv_dict: Dict[str, Any]) -> ZMeta:
     except Exception as e:
         print("[!] General error in KLV to ZMeta:", e)
         raise
-
