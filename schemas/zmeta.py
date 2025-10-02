@@ -1,5 +1,5 @@
 from typing import Optional, List, Union
-from pydantic import BaseModel, Field, validator, ValidationError
+from pydantic import BaseModel, Field, field_validator, ValidationError
 from datetime import datetime
 
 
@@ -31,9 +31,10 @@ class ZMeta(BaseModel):
     note: Optional[str] = None
     source_format: str
 
-    @validator('modality')
-    def validate_modality(cls, v):
+    @field_validator('modality', mode='after')
+    def validate_modality(cls, v: str) -> str:
         known = {"thermal", "rf", "eo", "ir", "acoustic"}
-        if v.lower() not in known:
+        lower = v.lower()
+        if lower not in known:
             raise ValueError(f"Unknown modality: {v}")
-        return v.lower()
+        return lower

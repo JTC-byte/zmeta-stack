@@ -1,4 +1,4 @@
-# ZMeta Stack requirements (runtime + dev/QA)
+﻿# ZMeta Stack requirements (runtime + dev/QA)
 # --- Runtime ---
 fastapi
 uvicorn[standard]
@@ -6,6 +6,7 @@ pydantic>=2
 pyyaml>=6
 websockets>=12
 requests>=2
+tkintermapview>=1.29
 python-dotenv>=1
 
 # --- Dev/QA (optional) ---

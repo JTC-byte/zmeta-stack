@@ -1,18 +1,23 @@
 from datetime import datetime, UTC
+import os
 import socket
 import json
 import time
 import random
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # === Configuration ===
-DEST_IP = "127.0.0.1"        # Localhost; change to multicast/group IP if needed
-DEST_PORT = 5005             # Must match listener
+DEST_IP = os.getenv("ZMETA_SIM_UDP_HOST", os.getenv("ZMETA_UDP_TARGET_HOST", "127.0.0.1"))        # Localhost; change to multicast/group IP if needed
+DEST_PORT = int(os.getenv("ZMETA_UDP_PORT", "5005"))             # Must match listener
 SEND_INTERVAL = 1.0          # Seconds between packets
 SENSOR_ID = "sim_thermal_01"
 MODALITY = "thermal"
 
-# === Fake Z-Meta Packet Generator ===
-def generate_fake_metadata():
+# === Thermal simulator payload generator ===
+def generate_thermal_packet():
     base_lat = 35.2712
     base_lon = -78.6375
     metadata = {
@@ -32,7 +37,7 @@ def generate_fake_metadata():
         "data": {
             "type": "hotspot",
             "value": random.uniform(45, 85),
-            "units": "°C",
+            "units": "degC",
             "confidence": round(random.uniform(0.7, 1.0), 2)
         },
         "pid": "target_simulated_1",
@@ -45,12 +50,12 @@ def generate_fake_metadata():
 # === Main Broadcast Loop ===
 def run_broadcaster():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    print(f"[+] Broadcasting to {DEST_IP}:{DEST_PORT}")
+    print(f"[+] Starting thermal simulator -> sending to {DEST_IP}:{DEST_PORT}")
     try:
         while True:
-            packet = generate_fake_metadata()
+            packet = generate_thermal_packet()
             sock.sendto(packet, (DEST_IP, DEST_PORT))
-            print(f"  → Sent packet @ {datetime.now(UTC).isoformat()}")
+            print(f"  -> Sent packet @ {datetime.now(UTC).isoformat()}")
             time.sleep(SEND_INTERVAL)
     except KeyboardInterrupt:
         print("\n[!] Broadcast stopped.")

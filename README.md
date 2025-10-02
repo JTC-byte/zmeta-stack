@@ -1,7 +1,7 @@
-# ZMeta Stack — Live Map • Ingest • Rules • Alerts
+# ZMeta Stack - Live Map - Ingest - Rules - Alerts
 
 A lightweight ISR workbench:
-**ingest → normalize to ZMeta → rules/alerts → WebSocket → live Leaflet map → record to NDJSON**.
+**ingest -> normalize to ZMeta -> rules/alerts -> WebSocket -> live Leaflet map -> record to NDJSON**.
 
 - FastAPI backend: REST **`/ingest`**, UDP **`:5005`**, WebSocket **`/ws`**
 - Same-origin UI served at **`/ui/live_map.html`** (root `/` redirects)
@@ -9,11 +9,19 @@ A lightweight ISR workbench:
 - **YAML rules** raise alerts (info/warn/crit) that pulse on the map
 - Recorder writes **NDJSON** under `data/records/` (gitignored)
 
-> Dev defaults: permissive CORS, no auth — great for local work. Lock down before exposing externally.
+> Dev defaults: permissive CORS, no auth - great for local work. Lock down before exposing externally.
 
 ---
 
 ## Quick start (Windows PowerShell)
+
+### One-command startup
+
+```powershell
+scripts\dev.ps1
+```
+
+### Manual setup
 
 ```powershell
 # Clone & enter
@@ -25,11 +33,11 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
-# Run the backend (IMPORTANT: use the venv’s Python)
+# Run the backend (IMPORTANT: use the venv's Python)
 python -m uvicorn backend.app.main:app --reload
 ```
 
-Open the map: **http://127.0.0.1:8000** → redirects to `/ui/live_map.html`
+Open the map: **http://127.0.0.1:8000** -> redirects to `/ui/live_map.html`
 
 > **Windows note:** Every new terminal starts without the venv.  
 > Reactivate before running:
@@ -47,13 +55,19 @@ Open the map: **http://127.0.0.1:8000** → redirects to `/ui/live_map.html`
 python -m tools.simulators.rf
 ```
 
-**B) KLV simulator (module run)**
+**B) Thermal simulator (module run)**
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m tools.simulators.thermal
+```
+
+**C) KLV simulator (module run)**
 ```powershell
 .\.venv\Scripts\Activate.ps1
 python -m tools.simulators.klv
 ```
 
-**C) Single REST packet (PowerShell)**
+**D) Single REST packet (PowerShell)**
 ```powershell
 $body = @{
   sensor_id="rf_sim_001"; modality="rf"; timestamp="2025-01-01T00:00:00Z"
@@ -64,7 +78,7 @@ $body = @{
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/ingest" -Method POST -ContentType "application/json" -Body $body
 ```
 
-You should see a marker near **[35.271, −78.637]** and **pulse rings** on alerts  
+You should see a marker near **[35.271, -78.637]** and **pulse rings** on alerts  
 (blue=info, orange=warn, red=crit).
 
 ---
@@ -78,7 +92,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# run through the venv’s Python so the reloader uses the right interpreter
+# run through the venv's Python so the reloader uses the right interpreter
 python -m uvicorn backend.app.main:app --reload
 
 # in another shell (activate venv), run a simulator:
@@ -88,23 +102,36 @@ python -m uvicorn backend.app.main:app --reload
 
 ---
 
-## One-click scripts (optional; coming soon)
+## Helper scripts
 
-You’ll be able to use:
-- **Windows:** `scripts/dev.cmd` (or `scripts/dev.ps1`)
-- **macOS/Linux:** `scripts/dev.sh`
+- **Windows:** `scripts/dev.ps1` (use `-NoGui` or `-NoSimulator`)
+- **macOS/Linux:** `scripts/dev.sh` (supports `--no-gui` / `--no-sim`)
 
-They will: create/activate `.venv`, install deps, open the UI, and run the server.
+Both scripts ensure the virtual environment exists, install requirements, then launch the backend, GUI, and RF simulator. Stop them with `Ctrl+C`.
 
 ---
 
+## Configuration
+
+Environment variables let you tune ports, URLs, and simulator targets:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `ZMETA_UDP_HOST` | `0.0.0.0` | Bind address for the UDP listener. |
+| `ZMETA_UDP_PORT` | `5005` | UDP port for ingest + simulators. |
+| `ZMETA_UI_BASE_URL` | `http://127.0.0.1:8000` | Base URL used for helper prints and GUI hints. |
+| `ZMETA_WS_GREETING` | `Connected to ZMeta WebSocket` | Text sent after a client connects. |
+| `ZMETA_CORS_ORIGINS` | `*` | Comma-separated origins allowed by FastAPI CORS middleware. |
+| `ZMETA_SIM_UDP_HOST` | `127.0.0.1` | Address simulators send UDP packets to (falls back to `ZMETA_UDP_TARGET_HOST`). |
+| `ZMETA_UDP_TARGET_HOST` | `127.0.0.1` | Override for simulator UDP target host. |
+
 ## Endpoints
 
-- `GET /` → redirects to `/ui/live_map.html`
-- `GET /ui/live_map.html` → live map UI (Leaflet + WS)
-- `GET /ui/ws_test.html` → prints every WebSocket message
-- `GET /favicon.ico` → alias to `/ui/favicon.svg` (tab icon)
-- `GET /healthz` → status/metrics, for example:
+- `GET /` -> redirects to `/ui/live_map.html`
+- `GET /ui/live_map.html` -> live map UI (Leaflet + WS)
+- `GET /ui/ws_test.html` -> prints every WebSocket message
+- `GET /favicon.ico` -> alias to `/ui/favicon.svg` (tab icon)
+- `GET /healthz` -> status/metrics, for example:
   ```json
   {
     "status": "ok",
@@ -118,21 +145,21 @@ They will: create/activate `.venv`, install deps, open the UI, and run the serve
     "last_packet_age_s": 0.14
   }
   ```
-- `POST /ingest` → accepts JSON; validates as **ZMeta** or auto-**adapts** then validates
-- `GET /rules` → list loaded rule names
-- `POST /rules/reload` → reload `config/rules.yaml` without restarting
+- `POST /ingest` -> accepts JSON; validates as **ZMeta** or auto-**adapts** then validates
+- `GET /rules` -> list loaded rule names
+- `POST /rules/reload` -> reload `config/rules.yaml` without restarting
 
 ---
 
-## Adapters (normalize “anything” → ZMeta)
+## Adapters (normalize "anything" -> ZMeta)
 
 **Location:** `tools/ingest_adapters.py`  
 Flow:
 1. Try native ZMeta validation.
 2. If validation fails, try adapters:
-   - **Simulated RF** (MHz → Hz) → `data.type: "rf_detection"`
-   - **Thermal** (°C) → `data.type: "thermal_hotspot"`
-   - **KLV-like dicts** → via `tools/translators/klv_to_zmeta.py`
+   - **Simulated RF** (MHz -> Hz) -> `data.type: "rf_detection"`
+   - **Thermal** (degC) -> `data.type: "thermal_hotspot"`
+   - **KLV-like dicts** -> via `tools/translators/klv_to_zmeta.py`
 
 Resulting ZMeta is:
 - broadcast over WS,  
@@ -147,7 +174,7 @@ Resulting ZMeta is:
 - Examples:
   - RF in the **915 MHz** ISM band
   - High-confidence RF
-  - Thermal hotspot ≥ 70 °C
+  - Thermal hotspot >= 70 degC
   - AOI example near default sim coordinates
 
 Map UI shows:
@@ -179,10 +206,10 @@ backend/app/main.py                # FastAPI app, WS hub, routes, favicon alias
 config/rules.yaml                  # YAML rules
 schemas/zmeta.py                   # ZMeta Pydantic models
 tools/recorder.py                  # NDJSON recorder (hourly rotate)
-tools/ingest_adapters.py           # normalize inbound payloads → ZMeta
+tools/ingest_adapters.py           # normalize inbound payloads -> ZMeta
 tools/rules.py                     # load/apply rules; de-dup alerts
 tools/simulators/{rf.py, klv.py}   # simulators (module-run)
-tools/translators/klv_to_zmeta.py  # KLV → ZMeta translator
+tools/translators/klv_to_zmeta.py  # KLV -> ZMeta translator
 zmeta_map_dashboard/live_map.html  # Leaflet map UI (served from /ui/)
 zmeta_map_dashboard/ws_test.html   # WebSocket message viewer
 zmeta_map_dashboard/favicon.svg    # tab icon (aliased at /favicon.ico)
@@ -218,12 +245,12 @@ pip-compile --upgrade --generate-hashes -o requirements.lock.txt requirements.tx
 
 ## Troubleshooting
 
-- **“WS: connected” but stats don’t move**  
+- **"WS: connected" but stats don't move**  
   Always open via backend origin: `http://127.0.0.1:8000/ui/live_map.html`.  
-  Opening the file directly with `file://…` blocks `/healthz`.
+  Opening the file directly with `file://...` blocks `/healthz`.
 
 - **No markers**  
-  Check `/healthz` → `validated_total` should increase.  
+  Check `/healthz` -> `validated_total` should increase.  
   If only `udp_received_total` rises, payload likely needs an adapter tweak.
 
 - **No alert pulses**  
@@ -231,7 +258,7 @@ pip-compile --upgrade --generate-hashes -o requirements.lock.txt requirements.tx
   Use `/ui/ws_test.html` to see live WS messages (feature + alert JSON).
 
 - **On Windows: `ModuleNotFoundError: No module named 'yaml'`**  
-  That’s uvicorn using a global Python.  
+  That's uvicorn using a global Python.  
   Activate the venv and launch via:
   ```powershell
   .\.venv\Scripts\Activate.ps1
@@ -239,7 +266,7 @@ pip-compile --upgrade --generate-hashes -o requirements.lock.txt requirements.tx
   ```
 
 - **Too many repeated alerts**  
-  Short-window de-dup is set to **3s** — adjust `AlertDeduper(ttl_s=3.0)` in `backend/app/main.py`.
+  Short-window de-dup is set to **3s** - adjust `AlertDeduper(ttl_s=3.0)` in `backend/app/main.py`.
 
 ---
 

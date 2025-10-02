@@ -1,17 +1,21 @@
-import socket
 import json
-import time
+import os
 import random
+import socket
+import time
 from datetime import datetime, timezone
-from schemas.zmeta import ZMeta, Location, Orientation, SensorData
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # UDP config
-UDP_IP = "127.0.0.1"
-UDP_PORT = 5005
+UDP_IP = os.getenv("ZMETA_SIM_UDP_HOST", os.getenv("ZMETA_UDP_TARGET_HOST", "127.0.0.1"))
+UDP_PORT = int(os.getenv("ZMETA_UDP_PORT", "5005"))
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-print("[+] Starting ZMeta continuous broadcaster...")
+print("[+] Starting KLV simulator broadcaster...")
 
 try:
     while True:
@@ -19,24 +23,24 @@ try:
         lat = 35.0 + random.uniform(-0.01, 0.01)
         lon = -78.0 + random.uniform(-0.01, 0.01)
 
-        packet = ZMeta(
-            sensor_id="klv_source_001",
-            modality="rf",
-            location=Location(lat=lat, lon=lon, alt=100.0),
-            orientation=Orientation(yaw=90.0, pitch=0.0, roll=0.0),
-            timestamp=datetime.now(timezone.utc),
-            data=SensorData(  # ✅ Corrected field name
-                type="rf_signal_strength",
-                value=-50.0
-            ),
-            pid=None,
-            tags=["converted", "klv"],
-            note="Converted from KLV",
-            source_format="KLV"
-        )
+        packet = {
+            "sensor_id": "klv_source_001",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "targetLatitude": lat,
+            "targetLongitude": lon,
+            "targetAltitude": 100.0,
+            "sensorType": random.choice(["RF", "EO", "IR"]),
+            "platformHeading": random.uniform(0, 360),
+            "platformPitch": random.uniform(-2.0, 2.0),
+            "platformRoll": random.uniform(-3.0, 3.0),
+            "signal_strength": -45.0 + random.uniform(-5.0, 5.0),
+            "sensorFOV": 12.0 + random.uniform(-2.0, 2.0),
+            "modulation": random.choice(["fm", "qam", "psk"]),
+            "confidence": round(random.uniform(0.6, 0.98), 2),
+        }
 
-        sock.sendto(packet.model_dump_json().encode(), (UDP_IP, UDP_PORT))
-        print(f"[+] Sent ZMeta packet: lat={lat:.5f}, lon={lon:.5f}")
+        sock.sendto(json.dumps(packet).encode("utf-8"), (UDP_IP, UDP_PORT))
+        print(f"[+] Sent KLV packet: lat={lat:.5f}, lon={lon:.5f}")
         time.sleep(1)
 
 except KeyboardInterrupt:

@@ -1,12 +1,16 @@
 import socket
 import json
+import os
 import random
 from datetime import datetime, timezone
+from dotenv import load_dotenv
 import time
 
+load_dotenv()
+
 # UDP target
-UDP_IP = "127.0.0.1"
-UDP_PORT = 5005
+UDP_IP = os.getenv("ZMETA_SIM_UDP_HOST", os.getenv("ZMETA_UDP_TARGET_HOST", "127.0.0.1"))
+UDP_PORT = int(os.getenv("ZMETA_UDP_PORT", "5005"))
 
 # Fixed RF sensor metadata
 SENSOR_ID = "sim_rf_01"
@@ -26,7 +30,7 @@ def simulate_location():
 # Main loop
 def run_broadcaster():
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    print(f"📡 Broadcasting RF packets to {UDP_IP}:{UDP_PORT}")
+    print(f"[RF] Broadcasting RF packets to {UDP_IP}:{UDP_PORT}")
 
     while True:
         packet = {
@@ -54,7 +58,7 @@ def run_broadcaster():
         json_data = json.dumps(packet).encode("utf-8")
         sock.sendto(json_data, (UDP_IP, UDP_PORT))
 
-        print(f"📡 Sent RF packet @ {packet['timestamp']} | Freq: {packet['data']['value']} MHz")
+        print(f"[RF] Sent RF packet @ {packet['timestamp']} | Freq: {packet['data']['value']} MHz")
         time.sleep(1)
 
 if __name__ == "__main__":

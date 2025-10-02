@@ -1,9 +1,12 @@
 # backend/app/main.py
 from __future__ import annotations
 from typing import Set, Optional
+import os
 import asyncio, json, time, logging
 from collections import deque
 from datetime import datetime, date, timezone
+
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +19,27 @@ from tools.recorder import recorder
 from tools.rules import rules
 from tools.ingest_adapters import adapt_to_zmeta
 
+load_dotenv()
+
+
+def _env_csv(name: str, default: list[str]) -> list[str]:
+    value = os.getenv(name)
+    if not value:
+        return default
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+UDP_HOST = os.getenv("ZMETA_UDP_HOST", "0.0.0.0")
+UDP_PORT = int(os.getenv("ZMETA_UDP_PORT", "5005"))
+UI_BASE_URL = os.getenv("ZMETA_UI_BASE_URL", "http://127.0.0.1:8000")
+WS_GREETING = os.getenv("ZMETA_WS_GREETING", "Connected to ZMeta WebSocket")
+ALLOWED_ORIGINS = _env_csv("ZMETA_CORS_ORIGINS", ["*"])
+
+def _ui_url(path: str) -> str:
+    base = UI_BASE_URL.rstrip('/')
+    return f"{base}{path}"
+
+
 # -----------------------------------------------------------------------------
 # App & middleware
 # -----------------------------------------------------------------------------
@@ -27,7 +51,7 @@ app.mount("/ui", StaticFiles(directory="zmeta_map_dashboard", html=True), name="
 # CORS (dev-wide; restrict later if needed)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
@@ -66,13 +90,16 @@ class WSHub:
         self.clients.discard(ws)
 
     async def broadcast_text(self, msg: str):
-        dead: list[WebSocket] = []
-        for ws in list(self.clients):
-            try:
-                await ws.send_text(msg)
-            except Exception:
-                dead.append(ws)
-        for ws in dead:
+        if not self.clients:
+            return
+        tasks = [self._send_one(ws, msg) for ws in list(self.clients)]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _send_one(self, ws: WebSocket, msg: str):
+        try:
+            await ws.send_text(msg)
+        except Exception:
             self.disconnect(ws)
 
 hub = WSHub()
@@ -195,7 +222,7 @@ async def rules_reload():
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await hub.connect(websocket)
-    await websocket.send_text("✅ Connected to ZMeta WebSocket")
+    await websocket.send_text(WS_GREETING)
     try:
         while True:
             data = await websocket.receive_text()  # echo for manual testing
@@ -297,15 +324,15 @@ async def startup():
     loop = asyncio.get_running_loop()
     transport, _ = await loop.create_datagram_endpoint(
         lambda: UDPProtocol(app.state.udp_queue),
-        local_addr=("0.0.0.0", 5005),
+        local_addr=(UDP_HOST, UDP_PORT),
     )
     app.state.udp_transport = transport
     app.state.udp_consumer_task = asyncio.create_task(udp_consumer(app.state.udp_queue))
 
     # Helpful links
-    print("\n📍 Live map:  http://127.0.0.1:8000/ui/live_map.html")
-    print("🧪 WS test:   http://127.0.0.1:8000/ui/ws_test.html")
-    print("❤️ Health:    http://127.0.0.1:8000/healthz\n")
+    print(f"\nLive map:  {_ui_url('/ui/live_map.html')}")
+    print(f"WS test:   {_ui_url('/ui/ws_test.html')}")
+    print(f"Health:    {_ui_url('/healthz')}\n")
 
 @app.on_event("shutdown")
 async def shutdown():

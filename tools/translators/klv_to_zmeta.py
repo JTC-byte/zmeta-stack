@@ -1,5 +1,5 @@
 from schemas.zmeta import ZMeta
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any
 from pydantic import ValidationError
 
@@ -14,7 +14,7 @@ def klv_to_zmeta(klv_dict: Dict[str, Any]) -> ZMeta:
         zmeta_dict = {
             "sensor_id": klv_dict.get("sensor_id", "klv_source_001"),
             "timestamp": datetime.fromisoformat(
-                klv_dict.get("timestamp", datetime.utcnow().isoformat()).replace("Z", "+00:00")
+                klv_dict.get("timestamp", datetime.now(timezone.utc).isoformat()).replace("Z", "+00:00")
             ),
             "location": {
                 "lat": klv_dict.get("targetLatitude", 0.0),
@@ -47,8 +47,8 @@ def klv_to_zmeta(klv_dict: Dict[str, Any]) -> ZMeta:
         return ZMeta(**zmeta_dict)
 
     except ValidationError as ve:
-        print("[!] Validation error in KLV → ZMeta:", ve)
+        print("[!] Validation error in KLV to ZMeta:", ve)
         raise
     except Exception as e:
-        print("[!] General error in KLV → ZMeta:", e)
+        print("[!] General error in KLV to ZMeta:", e)
         raise

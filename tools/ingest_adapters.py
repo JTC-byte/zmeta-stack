@@ -27,11 +27,14 @@ def _top_conf(p):
 def adapt_simulated_v1_rf(p: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     # Accept either explicit source_format or shape heuristics
     src = (p.get("source_format") or "").lower()
+    modality = (p.get("modality") or "").lower()
     dtype = _get(p, "data.type")
-    units = str(_get(p, "data.units", "")).lower()
+    units = str(_get(p, "data.units", "")).lower().strip()
     val = _get(p, "data.value")
 
-    if not (src == "simulated_json_v1" or (dtype == "frequency" and units in ("mhz", "mhz "))):
+    matches_format = src == "simulated_json_v1" and modality == "rf"
+    matches_shape = dtype == "frequency" and units == "mhz"
+    if not (matches_format or matches_shape):
         return None
     if not isinstance(val, (int, float)):
         return None

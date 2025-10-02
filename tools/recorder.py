@@ -1,7 +1,10 @@
 from __future__ import annotations
 import asyncio, json
+import logging
 from pathlib import Path
 from datetime import datetime, timezone
+
+log = logging.getLogger("zmeta.recorder")
 
 class NDJSONRecorder:
     def __init__(self, base_dir: str | Path = "data/records"):
@@ -11,6 +14,7 @@ class NDJSONRecorder:
         self._fh = None
         self._hour_key: str | None = None
         self.total_written = 0
+        self.dropped_total = 0
 
     async def start(self):
         self.base_dir.mkdir(parents=True, exist_ok=True)
@@ -37,7 +41,13 @@ class NDJSONRecorder:
                 line = json.dumps(obj, separators=(",", ":"), ensure_ascii=False)
             except Exception:
                 line = str(obj)
-        await self.queue.put(line)
+        try:
+            self.queue.put_nowait(line)
+        except asyncio.QueueFull:
+            self.dropped_total += 1
+            log.warning("recorder queue full; dropping entry", extra={"dropped": self.dropped_total})
+            return
+        await asyncio.sleep(0)
 
     def _rollover_if_needed(self, now: datetime):
         key = now.strftime("%Y%m%d_%H")  # UTC hour bucket
