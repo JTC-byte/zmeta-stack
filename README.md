@@ -124,6 +124,21 @@ Environment variables let you tune ports, URLs, and simulator targets:
 | `ZMETA_CORS_ORIGINS` | `*` | Comma-separated origins allowed by FastAPI CORS middleware. |
 | `ZMETA_SIM_UDP_HOST` | `127.0.0.1` | Address simulators send UDP packets to (falls back to `ZMETA_UDP_TARGET_HOST`). |
 | `ZMETA_UDP_TARGET_HOST` | `127.0.0.1` | Override for simulator UDP target host. |
+| `ZMETA_SHARED_SECRET` | (empty) | Optional shared secret required for `/ingest` and `/ws`. |
+| `ZMETA_AUTH_HEADER` | `x-zmeta-secret` | Header name to read the shared secret from. |
+| `ZMETA_ENV` | `dev` | Hint for environment-specific behavior (e.g., prod CORS tightening). |
+| `ZMETA_WS_QUEUE` | `64` | Max per-client WebSocket buffer size before dropping messages. |
+
+
+### Secure mode
+
+Set `ZMETA_SHARED_SECRET` (and optionally `ZMETA_AUTH_HEADER`) to require clients to present a shared secret.
+
+- REST clients: include the header `X-ZMeta-Secret: <value>` (or whichever header you configure).
+- WebSocket clients: pass the header or append `?secret=<value>` to `/ws`.
+- `/healthz` surfaces `auth_mode`, `auth_header`, and `allowed_origins` so you can confirm the mode.
+
+When hardening a deployment, also tighten `ZMETA_CORS_ORIGINS` and set `ZMETA_ENV=prod`.
 
 ## Endpoints
 
@@ -276,3 +291,12 @@ pip-compile --upgrade --generate-hashes -o requirements.lock.txt requirements.tx
 - Keep `data/records/` out of Git  
 - Ignore `__pycache__/`, `.pyc` (already in `.gitignore`)  
 - Consider `ruff` / `black` / `pre-commit` for consistent formatting
+
+
+
+
+\n## Replay recorded data\n\n- bash: \scripts/replay.sh data/records/20250101_12.ndjson http://127.0.0.1:8000\\n- PowerShell: \scripts/replay.ps1 -Path data/records/20250101_12.ndjson -BaseUrl http://127.0.0.1:8000\\n\n
+\n## Containers\n\n- Build locally: \docker build -t zmeta .\\n- Dev compose: \docker-compose up\ (hot reload on port 8000).\n\n
+
+
+

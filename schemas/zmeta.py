@@ -3,6 +3,9 @@ from pydantic import BaseModel, Field, field_validator, ValidationError
 from datetime import datetime
 
 
+SUPPORTED_SCHEMA_VERSIONS = {"1.0"}
+
+
 class Location(BaseModel):
     lat: float
     lon: float
@@ -29,6 +32,8 @@ class ZMeta(BaseModel):
     pid: Optional[str] = None
     tags: Optional[List[str]] = None
     note: Optional[str] = None
+    schema_version: str = "1.0"
+    sequence: Optional[int] = None
     source_format: str
 
     @field_validator('modality', mode='after')
@@ -38,3 +43,16 @@ class ZMeta(BaseModel):
         if lower not in known:
             raise ValueError(f"Unknown modality: {v}")
         return lower
+
+
+    @field_validator('schema_version', mode='after')
+    def validate_schema_version(cls, v: str) -> str:
+        if v not in SUPPORTED_SCHEMA_VERSIONS:
+            raise ValueError(f"Unsupported schema_version: {v}")
+        return v
+
+    @field_validator('sequence', mode='after')
+    def validate_sequence(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v < 0:
+            raise ValueError('sequence must be >= 0')
+        return v

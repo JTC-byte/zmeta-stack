@@ -1,20 +1,22 @@
-# backend/app/main.py
+﻿# backend/app/main.py
 from __future__ import annotations
 from typing import Set, Optional
 import os
 import asyncio, json, time, logging
-from collections import deque
+import contextlib
+from collections import deque, Counter
+from dataclasses import dataclass
 from datetime import datetime, date, timezone
 
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from pydantic import ValidationError
 
-from schemas.zmeta import ZMeta
+from schemas.zmeta import ZMeta, SUPPORTED_SCHEMA_VERSIONS
 from tools.recorder import recorder
 from tools.rules import rules
 from tools.ingest_adapters import adapt_to_zmeta
@@ -34,6 +36,20 @@ UDP_PORT = int(os.getenv("ZMETA_UDP_PORT", "5005"))
 UI_BASE_URL = os.getenv("ZMETA_UI_BASE_URL", "http://127.0.0.1:8000")
 WS_GREETING = os.getenv("ZMETA_WS_GREETING", "Connected to ZMeta WebSocket")
 ALLOWED_ORIGINS = _env_csv("ZMETA_CORS_ORIGINS", ["*"])
+AUTH_HEADER = os.getenv("ZMETA_AUTH_HEADER", "x-zmeta-secret")
+SHARED_SECRET = os.getenv("ZMETA_SHARED_SECRET", "").strip()
+ENVIRONMENT = os.getenv("ZMETA_ENV", "dev")
+WS_QUEUE_MAX = int(os.getenv("ZMETA_WS_QUEUE", "64"))
+
+def _auth_enabled() -> bool:
+    return bool(SHARED_SECRET)
+
+
+def _verify_shared_secret(provided: str | None) -> bool:
+    if not _auth_enabled():
+        return True
+    return provided == SHARED_SECRET
+
 
 def _ui_url(path: str) -> str:
     base = UI_BASE_URL.rstrip('/')
@@ -78,29 +94,68 @@ def _dumps(obj) -> str:
 # -----------------------------------------------------------------------------
 # WebSocket hub
 # -----------------------------------------------------------------------------
+@dataclass
+class WSClient:
+    websocket: WebSocket
+    queue: asyncio.Queue[str]
+    sender: asyncio.Task
+
+
 class WSHub:
     def __init__(self):
-        self.clients: Set[WebSocket] = set()
+        self._clients: dict[WebSocket, WSClient] = {}
 
     async def connect(self, ws: WebSocket):
         await ws.accept()
-        self.clients.add(ws)
+        queue: asyncio.Queue[str] = asyncio.Queue(maxsize=WS_QUEUE_MAX)
+        sender = asyncio.create_task(self._sender(ws, queue))
+        self._clients[ws] = WSClient(ws=ws, queue=queue, sender=sender)
 
-    def disconnect(self, ws: WebSocket):
-        self.clients.discard(ws)
+    async def disconnect(self, ws: WebSocket, *, cancel_sender: bool = True):
+        client = self._clients.pop(ws, None)
+        if not client:
+            return
+        if cancel_sender:
+            client.sender.cancel()
+            with contextlib.suppress(Exception):
+                await client.sender
+        with contextlib.suppress(Exception):
+            await ws.close()
 
     async def broadcast_text(self, msg: str):
-        if not self.clients:
+        if not self._clients:
             return
-        tasks = [self._send_one(ws, msg) for ws in list(self.clients)]
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
+        for ws, client in list(self._clients.items()):
+            queue = client.queue
+            try:
+                queue.put_nowait(msg)
+            except asyncio.QueueFull:
+                stats.note_ws_dropped()
+                with contextlib.suppress(asyncio.QueueEmpty):
+                    queue.get_nowait()
+                try:
+                    queue.put_nowait(msg)
+                except asyncio.QueueFull:
+                    stats.note_ws_dropped()
+                    await self.disconnect(ws)
 
-    async def _send_one(self, ws: WebSocket, msg: str):
+    async def _sender(self, ws: WebSocket, queue: asyncio.Queue[str]):
         try:
-            await ws.send_text(msg)
+            while True:
+                msg = await queue.get()
+                try:
+                    await ws.send_text(msg)
+                    stats.note_ws_sent()
+                finally:
+                    queue.task_done()
+        except asyncio.CancelledError:
+            pass
         except Exception:
-            self.disconnect(ws)
+            pass
+        finally:
+            if ws in self._clients:
+                await self.disconnect(ws, cancel_sender=False)
+
 
 hub = WSHub()
 
@@ -113,17 +168,40 @@ class Stats:
         self.validated_total = 0
         self.dropped_total = 0
         self.alerts_total = 0
+        self.ws_sent_total = 0
+        self.ws_dropped_total = 0
+        self.sequence_counter = 0
+        self.adapter_counts: Counter[str] = Counter()
         self.last_packet_ts: Optional[float] = None
         self._validated_ts = deque(maxlen=600)  # ~10min @1Hz
 
-    def note_received(self):  self.udp_received_total += 1
-    def note_dropped(self):   self.dropped_total += 1
+    def note_received(self):
+        self.udp_received_total += 1
+
+    def note_dropped(self):
+        self.dropped_total += 1
+
     def note_validated(self):
         self.validated_total += 1
         now = time.time()
         self.last_packet_ts = now
         self._validated_ts.append(now)
-    def note_alert(self):     self.alerts_total += 1
+
+    def note_alert(self):
+        self.alerts_total += 1
+
+    def note_ws_sent(self):
+        self.ws_sent_total += 1
+
+    def note_ws_dropped(self):
+        self.ws_dropped_total += 1
+
+    def note_adapter(self, name: str):
+        self.adapter_counts[name] += 1
+
+    def next_sequence(self) -> int:
+        self.sequence_counter += 1
+        return self.sequence_counter
 
     def eps(self, window_s: int = 10) -> float:
         if not self._validated_ts:
@@ -135,33 +213,9 @@ class Stats:
 
 stats = Stats()
 
-# -----------------------------------------------------------------------------
-# Short-window alert de-dup
-# -----------------------------------------------------------------------------
-class AlertDeduper:
-    def __init__(self, ttl_s: float = 3.0, max_keys: int = 10000):
-        self.ttl = ttl_s
-        self.max = max_keys
-        self._seen: dict[str, float] = {}
+    def metrics(self) -> dict[str, float]:
+        return {"ttl_s": self.ttl, "checked_total": self.total_checked, "suppressed_total": self.total_suppressed}
 
-    def _key(self, a: dict) -> str:
-        lat = a.get("loc", {}).get("lat")
-        lon = a.get("loc", {}).get("lon")
-        if isinstance(lat, (int, float)): lat = round(float(lat), 4)
-        if isinstance(lon, (int, float)): lon = round(float(lon), 4)
-        return f"{a.get('rule')}|{a.get('sensor_id')}|{a.get('severity')}|{lat},{lon}"
-
-    def should_send(self, a: dict) -> bool:
-        now = time.time()
-        k = self._key(a)
-        ts = self._seen.get(k)
-        if ts is not None and (now - ts) < self.ttl:
-            return False
-        self._seen[k] = now
-        if len(self._seen) > self.max:
-            cutoff = now - self.ttl
-            self._seen = {k: t for k, t in self._seen.items() if t >= cutoff}
-        return True
 
 deduper = AlertDeduper(ttl_s=3.0)
 
@@ -170,13 +224,23 @@ deduper = AlertDeduper(ttl_s=3.0)
 # -----------------------------------------------------------------------------
 def _validate_or_adapt(payload: dict) -> ZMeta:
     """Validate to ZMeta; if that fails, normalize via adapter then validate."""
+    adapter_name = 'native'
     try:
-        return ZMeta.model_validate(payload)
+        z = ZMeta.model_validate(payload)
     except ValidationError:
         adapted = adapt_to_zmeta(payload)
         if adapted is None:
             raise
-        return ZMeta.model_validate(adapted)
+        adapter_name, adapted_payload = adapted
+        z = ZMeta.model_validate(adapted_payload)
+    else:
+        adapter_name = 'native'
+
+    if z.sequence is None:
+        z = z.model_copy(update={'sequence': stats.next_sequence()})
+
+    stats.note_adapter(adapter_name)
+    return z
 
 # -----------------------------------------------------------------------------
 # Routes
@@ -208,6 +272,14 @@ async def healthz():
         "eps_1s": stats.eps(1),
         "eps_10s": stats.eps(10),
         "last_packet_age_s": age,
+        "ws_queue_max": WS_QUEUE_MAX,
+        "ws_sent_total": stats.ws_sent_total,
+        "ws_dropped_total": stats.ws_dropped_total,
+        "auth_mode": 'shared_secret' if _auth_enabled() else 'disabled',
+        "auth_header": AUTH_HEADER if _auth_enabled() else None,
+        "allowed_origins": ALLOWED_ORIGINS,
+        "environment": ENVIRONMENT,
+        "supported_schema_versions": sorted(SUPPORTED_SCHEMA_VERSIONS),
     }
 
 @app.get("/rules")
@@ -221,6 +293,11 @@ async def rules_reload():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    provided = websocket.headers.get(AUTH_HEADER) or websocket.query_params.get('secret')
+    if not _verify_shared_secret(provided):
+        await websocket.close(code=4401)
+        return
+
     await hub.connect(websocket)
     await websocket.send_text(WS_GREETING)
     try:
@@ -228,12 +305,19 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()  # echo for manual testing
             await websocket.send_text(f"Echo: {data}")
     except WebSocketDisconnect:
-        hub.disconnect(websocket)
+        pass
     except Exception:
-        hub.disconnect(websocket)
+        pass
+    finally:
+        await hub.disconnect(websocket)
 
 @app.post("/ingest")
-async def ingest(payload: dict):
+async def ingest(request: Request, payload: dict):
+    if _auth_enabled():
+        provided = request.headers.get(AUTH_HEADER) or request.query_params.get('secret')
+        if not _verify_shared_secret(provided):
+            raise HTTPException(status_code=401, detail='Unauthorized')
+
     # Validate/normalize
     try:
         z = _validate_or_adapt(payload)
@@ -347,3 +431,7 @@ async def shutdown():
         except Exception:
             pass
     await recorder.stop()
+
+
+
+

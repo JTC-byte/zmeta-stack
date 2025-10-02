@@ -1,7 +1,9 @@
-from schemas.zmeta import ZMeta
+﻿"""Translate KLV dictionaries into ZMeta events."""\n\nfrom schemas.zmeta import ZMeta
 from datetime import datetime, timezone
 from typing import Dict, Any
 from pydantic import ValidationError
+
+SCHEMA_VERSION = "1.0"
 
 def klv_to_zmeta(klv_dict: Dict[str, Any]) -> ZMeta:
     """
@@ -10,7 +12,6 @@ def klv_to_zmeta(klv_dict: Dict[str, Any]) -> ZMeta:
     """
 
     try:
-        # Build ZMeta-compatible dictionary
         zmeta_dict = {
             "sensor_id": klv_dict.get("sensor_id", "klv_source_001"),
             "timestamp": datetime.fromisoformat(
@@ -40,10 +41,10 @@ def klv_to_zmeta(klv_dict: Dict[str, Any]) -> ZMeta:
             "pid": klv_dict.get("pid", None),
             "tags": klv_dict.get("tags", ["converted", "klv"]),
             "note": klv_dict.get("note", "Converted from KLV"),
-            "source_format": "KLV"
+            "source_format": "KLV",
+            "schema_version": SCHEMA_VERSION,
         }
 
-        # Validate and return as ZMeta object
         return ZMeta(**zmeta_dict)
 
     except ValidationError as ve:
@@ -52,3 +53,4 @@ def klv_to_zmeta(klv_dict: Dict[str, Any]) -> ZMeta:
     except Exception as e:
         print("[!] General error in KLV to ZMeta:", e)
         raise
+

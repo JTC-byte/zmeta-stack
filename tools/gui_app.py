@@ -570,7 +570,12 @@ class ZMetaApp(ttk.Frame):
         else:
             host = base
             scheme = "ws://"
-        return f"{scheme}{host}/ws"
+        url = f"{scheme}{host}/ws"
+        secret = self.secret_var.get().strip()
+        if secret:
+            connector = '&' if '?' in url else '?'
+            url = f"{url}{connector}secret={secret}"
+        return url
 
 
 def main() -> None:
@@ -581,6 +586,14 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+
+
+
+
+
 
 
 

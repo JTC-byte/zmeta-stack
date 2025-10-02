@@ -1,13 +1,15 @@
-from __future__ import annotations
+﻿from __future__ import annotations
+"""Async NDJSON recorder with optional retention trimming."""
 import asyncio, json
 import logging
+import os
 from pathlib import Path
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 log = logging.getLogger("zmeta.recorder")
 
 class NDJSONRecorder:
-    def __init__(self, base_dir: str | Path = "data/records"):
+    def __init__(self, base_dir: str | Path = "data/records", max_age_hours: float | None = None):
         self.base_dir = Path(base_dir)
         self.queue: asyncio.Queue[str] = asyncio.Queue(maxsize=10000)
         self._task: asyncio.Task | None = None
@@ -15,6 +17,7 @@ class NDJSONRecorder:
         self._hour_key: str | None = None
         self.total_written = 0
         self.dropped_total = 0
+        self.max_age = max_age_hours if max_age_hours and max_age_hours > 0 else None
 
     async def start(self):
         self.base_dir.mkdir(parents=True, exist_ok=True)
@@ -33,7 +36,6 @@ class NDJSONRecorder:
             self._fh = None
 
     async def enqueue(self, obj):
-        # obj can be dict/pydantic or a pre-serialized JSON string
         if isinstance(obj, str):
             line = obj
         else:
@@ -50,14 +52,26 @@ class NDJSONRecorder:
         await asyncio.sleep(0)
 
     def _rollover_if_needed(self, now: datetime):
-        key = now.strftime("%Y%m%d_%H")  # UTC hour bucket
+        key = now.strftime("%Y%m%d_%H")
         if key != self._hour_key or self._fh is None:
             if self._fh:
                 self._fh.flush()
                 self._fh.close()
             self._hour_key = key
             path = self.base_dir / f"{key}.ndjson"
-            self._fh = path.open("a", encoding="utf-8", buffering=1)  # line buffered
+            self._fh = path.open("a", encoding="utf-8", buffering=1)
+        if self.max_age:
+            self._prune_old_files(now)
+
+    def _prune_old_files(self, now: datetime):
+        cutoff = now - timedelta(hours=self.max_age)
+        for path in self.base_dir.glob("*.ndjson"):
+            try:
+                if datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc) < cutoff:
+                    path.unlink()
+                    log.info("Removed recorder file %s (older than %.1f h)", path.name, self.max_age)
+            except Exception as exc:
+                log.warning("Failed pruning %s: %s", path, exc)
 
     async def _run(self):
         while True:
@@ -70,10 +84,16 @@ class NDJSONRecorder:
                     self._fh.write("\n")
                 self.total_written += 1
             except Exception:
-                # keep pipeline alive on write errors
                 pass
             finally:
                 self.queue.task_done()
 
-# Singleton instance that main.py imports
-recorder = NDJSONRecorder()
+max_age_env = os.getenv("ZMETA_RECORDER_RETENTION_HOURS")
+try:
+    max_age_hours = float(max_age_env) if max_age_env else None
+except ValueError:
+    log.warning("Invalid ZMETA_RECORDER_RETENTION_HOURS=%s", max_age_env)
+    max_age_hours = None
+
+recorder = NDJSONRecorder(max_age_hours=max_age_hours)
+
