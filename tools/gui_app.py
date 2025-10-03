@@ -188,7 +188,7 @@ class ZMetaApp(ttk.Frame):
         self.secret_var = tk.StringVar(value="")
         self.ws_status_var = tk.StringVar(value="disconnected")
 
-        self.alerts: list[dict[str, Any]] = []
+        self.alerts: deque[dict[str, Any]] = deque(maxlen=200)
         self.alert_total_count = 0
         self.alert_total_var = tk.StringVar(value="Alerts: 0")
         self.alert_severity_filters: dict[str, tk.BooleanVar] = {
@@ -499,34 +499,54 @@ class ZMetaApp(ttk.Frame):
             "raw": data,
             "received_at": datetime.now(timezone.utc),
         }
-        self.alerts.insert(0, entry)
-        if len(self.alerts) > 200:
-            self.alerts.pop()
+        self.alerts.appendleft(entry)
         self.alert_total_count += 1
         self.alert_total_var.set(f"Alerts: {self.alert_total_count}")
         self.health_alerts_var.set(str(self.alert_total_count))
         self._refresh_alert_view()
 
     def _refresh_alert_view(self) -> None:
+
         if not self.alert_tree:
+
             return
+
         tree = self.alert_tree
+
         tree.delete(*tree.get_children())
+
         for idx, entry in enumerate(self._filtered_alerts()):
+
             time_display = self._format_time_local(entry.get("timestamp") or entry["received_at"])
+
             location_display = self._format_coords(entry.get("lat"), entry.get("lon"))
+
+            severity_display = f"{self._severity_dot(entry['severity'])} {entry['severity'].upper()}"
+
             tree.insert(
+
                 "",
+
                 idx,
+
                 iid=f"alert-{idx}",
+
                 values=(
+
                     entry["rule"],
-                    entry["severity"].upper(),
+
+                    severity_display,
+
                     time_display,
+
                     location_display,
+
                 ),
+
                 tags=(entry["severity"],),
+
             )
+
 
     def _filtered_alerts(self) -> list[dict[str, Any]]:
         active = {level for level, var in self.alert_severity_filters.items() if var.get()}
@@ -789,6 +809,10 @@ class ZMetaApp(ttk.Frame):
     @staticmethod
     def _severity_color(severity: str) -> str:
         return SEVERITY_COLORS.get(severity.lower(), SEVERITY_COLORS["default"])
+
+    @staticmethod
+    def _severity_dot(severity: str) -> str:
+        return '?'
 
     def _on_track_select(self, event: tk.Event) -> None:
         if not self.track_tree:
