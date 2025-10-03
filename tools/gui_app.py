@@ -224,6 +224,8 @@ class ZMetaApp(ttk.Frame):
         self.alert_markers: list[Any] = []
 
         self.log_history = deque(maxlen=500)
+        self.log_text: ScrolledText | None = None
+        self.notebook: ttk.Notebook | None = None
 
         self._init_styles()
         self._build_ui()
@@ -272,8 +274,30 @@ class ZMetaApp(ttk.Frame):
         ttk.Label(top, text="WS:").grid(row=0, column=7, padx=(12, 4))
         ttk.Label(top, textvariable=self.ws_status_var).grid(row=0, column=8, sticky="w")
 
-        content = ttk.Frame(self)
-        content.grid(row=1, column=0, sticky="nsew")
+        notebook = ttk.Notebook(self)
+        notebook.grid(row=1, column=0, sticky="nsew")
+        self.notebook = notebook
+
+        live_tab = ttk.Frame(notebook)
+        live_tab.columnconfigure(0, weight=1)
+        live_tab.rowconfigure(0, weight=1)
+        notebook.add(live_tab, text="Live")
+
+        debug_tab = ttk.Frame(notebook, padding=12)
+        debug_tab.columnconfigure(0, weight=1)
+        debug_tab.rowconfigure(1, weight=1)
+        notebook.add(debug_tab, text="Debug")
+
+        self._build_live_tab(live_tab)
+        self._build_debug_tab(debug_tab)
+
+
+    def _build_live_tab(self, parent: ttk.Frame) -> None:
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(0, weight=1)
+
+        content = ttk.Frame(parent)
+        content.grid(row=0, column=0, sticky="nsew")
         content.columnconfigure(0, weight=3)
         content.columnconfigure(1, weight=2)
         content.rowconfigure(0, weight=1)
@@ -299,6 +323,25 @@ class ZMetaApp(ttk.Frame):
         self._build_alerts_card(sidebar, row=0)
         self._build_tracks_card(sidebar, row=1)
         self._build_health_card(sidebar, row=2)
+
+    def _build_debug_tab(self, parent: ttk.Frame) -> None:
+        parent.columnconfigure(0, weight=1)
+        parent.rowconfigure(1, weight=1)
+
+        header = ttk.Frame(parent)
+        header.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        header.columnconfigure(0, weight=1)
+        ttk.Label(header, text="Debug Log", style="CardTitle.TLabel").grid(row=0, column=0, sticky="w")
+        buttons = ttk.Frame(header)
+        buttons.grid(row=0, column=1, sticky="e")
+        ttk.Button(buttons, text="Copy All", command=self._copy_log).grid(row=0, column=0, padx=(0, 6))
+        ttk.Button(buttons, text="Clear", command=self._clear_log).grid(row=0, column=1)
+
+        text_widget = ScrolledText(parent, wrap="word")
+        text_widget.grid(row=1, column=0, sticky="nsew")
+        text_widget.configure(state="disabled")
+        self.log_text = text_widget
+        self._refresh_log_widget()
 
     def _create_card(self, parent: ttk.Frame, title: str, row: int) -> ttk.Frame:
         card = ttk.Frame(parent, style="Card.TFrame", padding=12)
@@ -671,6 +714,28 @@ class ZMetaApp(ttk.Frame):
     def _append_log(self, text: str) -> None:
         self.log_history.append(text)
         print(text)
+        self._refresh_log_widget()
+
+
+    def _refresh_log_widget(self) -> None:
+        if not self.log_text:
+            return
+        self.log_text.configure(state="normal")
+        self.log_text.delete("1.0", tk.END)
+        if self.log_history:
+            self.log_text.insert(tk.END, "\n".join(self.log_history) + "\n")
+        self.log_text.configure(state="disabled")
+        self.log_text.see(tk.END)
+
+    def _copy_log(self) -> None:
+        text = "\n".join(self.log_history)
+        self.clipboard_clear()
+        if text:
+            self.clipboard_append(text)
+
+    def _clear_log(self) -> None:
+        self.log_history.clear()
+        self._refresh_log_widget()
 
     def _upsert_track(self, data: dict[str, Any]) -> None:
         loc = data.get("location") or {}
