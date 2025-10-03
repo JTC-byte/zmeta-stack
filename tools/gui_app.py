@@ -239,12 +239,25 @@ class ZMetaApp(ttk.Frame):
             style.theme_use("clam")
         except Exception:
             pass
+
+        base_font = ("Segoe UI", 14)
+        small_font = ("Segoe UI", 12)
+        title_font = ("Segoe UI", 16, "bold")
+
+        style.configure("TLabel", font=base_font, foreground="#0f1419")
         style.configure("Card.TFrame", background="#ffffff", borderwidth=1, relief="solid")
-        style.configure("CardTitle.TLabel", font=("Segoe UI", 14, "bold"))
-        style.configure("Muted.TLabel", foreground="#637081")
-        style.configure("Value.TLabel", font=("Segoe UI", 12, "bold"))
-        style.configure("Treeview", rowheight=24, font=("Segoe UI", 11))
-        style.configure("Treeview.Heading", font=("Segoe UI", 11, "bold"))
+        style.configure("CardTitle.TLabel", font=title_font, foreground="#0f1419")
+        style.configure("Muted.TLabel", foreground="#637081", font=small_font)
+        style.configure("Value.TLabel", font=("Segoe UI", 18, "bold"))
+
+        style.configure("Treeview", rowheight=26, font=small_font, background="#ffffff", fieldbackground="#ffffff", bordercolor="#e6e9ef")
+        style.configure("Treeview.Heading", font=("Segoe UI", 12, "bold"), foreground="#0f1419")
+        style.map("Treeview", background=[('selected', '#d6e4ff')])
+
+        style.configure('Notebook.Tab', padding=(16, 8), font=small_font)
+        style.map('Notebook.Tab', foreground=[('active', '#0f1419'), ('selected', '#0f1419')])
+
+        style.configure('TButton', padding=(10, 6), font=small_font)
 
     def _build_ui(self) -> None:
         self.grid(row=0, column=0, sticky="nsew")
