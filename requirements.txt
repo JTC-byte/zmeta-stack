@@ -10,6 +10,7 @@ tkintermapview>=1.29
 python-dotenv>=1
 
 # --- Dev/QA (optional) ---
+httpx>=0.27
 pytest>=7
 black>=24
 ruff>=0.5
