@@ -205,8 +205,10 @@ class ZMetaApp(ttk.Frame):
         self.health_payload: dict[str, Any] | None = None
         self.health_poll_ms = 15000
         self._health_poll_job: int | None = None
-        self.health_details_window: tk.Toplevel | None = None
+        self.health_details_visible = tk.BooleanVar(value=False)
+        self.health_details_frame: ttk.Frame | None = None
         self.health_details_text: ScrolledText | None = None
+        self.health_toggle_btn: ttk.Button | None = None
 
         self.tracks: dict[str, dict[str, Any]] = {}
         self.track_history: dict[str, list[tuple[float, float]]] = {}
@@ -412,13 +414,26 @@ class ZMetaApp(ttk.Frame):
         for idx, (label, var) in enumerate(metrics):
             frame = ttk.Frame(grid)
             frame.grid(row=idx // 2, column=idx % 2, sticky="ew", padx=(0, 8), pady=(0, 4))
-            ttk.Label(frame, text=label + ":", style="Muted.TLabel").grid(row=0, column=0, sticky="w")
+            ttk.Label(frame, text=f"{label}:", style="Muted.TLabel").grid(row=0, column=0, sticky="w")
             ttk.Label(frame, textvariable=var).grid(row=0, column=1, sticky="w", padx=(4, 0))
 
         footer = ttk.Frame(card)
         footer.grid(row=3, column=0, sticky="ew")
+        footer.columnconfigure(0, weight=1)
         ttk.Label(footer, textvariable=self.health_updated_var, style="Muted.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Button(footer, text="Details", command=self._show_health_details).grid(row=0, column=1, sticky="e")
+        toggle = ttk.Button(footer, text="Details (show)", command=self._toggle_health_details)
+        toggle.grid(row=0, column=1, sticky="e")
+        self.health_toggle_btn = toggle
+
+        details = ttk.Frame(card)
+        details.grid(row=4, column=0, sticky="nsew")
+        details.columnconfigure(0, weight=1)
+        text_widget = ScrolledText(details, height=8, wrap="word")
+        text_widget.grid(row=0, column=0, sticky="nsew")
+        text_widget.configure(state="disabled")
+        self.health_details_frame = details
+        self.health_details_text = text_widget
+        details.grid_remove()
 
     def _schedule_health_poll(self) -> None:
         if self._health_poll_job is not None:
@@ -596,6 +611,8 @@ class ZMetaApp(ttk.Frame):
     def _handle_health(self, payload: dict[str, Any]) -> None:
         self.health_payload = payload
         self._update_health_summary(payload)
+        if self.health_details_visible.get():
+            self._update_health_details(payload)
 
     def _update_health_summary(self, payload: dict[str, Any]) -> None:
         status = str(payload.get("status", "unknown"))
@@ -622,29 +639,34 @@ class ZMetaApp(ttk.Frame):
         self.health_last_packet_var.set("--")
         self.health_updated_var.set(datetime.now().strftime("error %H:%M:%S"))
         self._append_log(f"[HEALTH ERROR] {error}")
-
-    def _show_health_details(self) -> None:
-        if not self.health_payload:
-            messagebox.showinfo("Health details", "No health data yet.")
-            return
-        data = json.dumps(self.health_payload, indent=2)
-        if self.health_details_window and tk.Toplevel.winfo_exists(self.health_details_window):
-            self.health_details_window.lift()
-            assert self.health_details_text is not None
+        if self.health_details_visible.get() and self.health_details_text:
             self.health_details_text.configure(state="normal")
             self.health_details_text.delete("1.0", tk.END)
-            self.health_details_text.insert(tk.END, data)
+            self.health_details_text.insert(tk.END, f"Health check failed: {error}\n")
             self.health_details_text.configure(state="disabled")
+
+    def _toggle_health_details(self) -> None:
+        if not self.health_details_frame or not self.health_details_text or not self.health_toggle_btn:
             return
-        window = tk.Toplevel(self)
-        window.title("Health details")
-        window.geometry("420x420")
-        text_widget = ScrolledText(window, wrap="word")
-        text_widget.pack(fill="both", expand=True)
-        text_widget.insert(tk.END, data)
-        text_widget.configure(state="disabled")
-        self.health_details_window = window
-        self.health_details_text = text_widget
+        visible = not self.health_details_visible.get()
+        self.health_details_visible.set(visible)
+        if visible:
+            self.health_details_frame.grid()
+            self.health_toggle_btn.configure(text="Details (hide)")
+            if self.health_payload:
+                self._update_health_details(self.health_payload)
+        else:
+            self.health_details_frame.grid_remove()
+            self.health_toggle_btn.configure(text="Details (show)")
+
+    def _update_health_details(self, payload: dict[str, Any]) -> None:
+        if not self.health_details_text:
+            return
+        data = json.dumps(payload, indent=2)
+        self.health_details_text.configure(state="normal")
+        self.health_details_text.delete("1.0", tk.END)
+        self.health_details_text.insert(tk.END, data + "\n")
+        self.health_details_text.configure(state="disabled")
 
     def _append_log(self, text: str) -> None:
         self.log_history.append(text)
