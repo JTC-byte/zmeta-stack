@@ -3,7 +3,7 @@
 A lightweight ISR workbench:
 **ingest -> normalize to ZMeta -> rules/alerts -> WebSocket -> live Leaflet map -> record to NDJSON**.
 
-- FastAPI backend: REST **`/ingest`**, UDP **`:5005`**, WebSocket **`/ws`**
+- FastAPI backend: REST **`/api/v1/ingest`**, UDP **`:5005`**, WebSocket **`/ws`**
 - Same-origin UI served at **`/ui/live_map.html`** (root `/` redirects)
 - **Adapters** normalize simulator/KLV payloads to **ZMeta**
 - **YAML rules** raise alerts (info/warn/crit) that pulse on the map
@@ -81,7 +81,7 @@ $body = @{
   location=@{ lat=35.271; lon=-78.637 }
   data=@{ type="rf_detection"; value=@{ frequency_hz=915000000; rssi_dbm=-45.2; bandwidth_hz=20000; dwell_s=0.8 } }
 } | ConvertTo-Json -Depth 6
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/ingest" -Method POST -ContentType "application/json" -Body $body
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/ingest" -Method POST -ContentType "application/json" -Body $body
 ```
 
 You should see a marker near **[35.271, -78.637]** and **pulse rings** on alerts  
@@ -152,23 +152,13 @@ When hardening a deployment, also tighten `ZMETA_CORS_ORIGINS` and set `ZMETA_EN
 - `GET /ui/live_map.html` -> live map UI (Leaflet + WS)
 - `GET /ui/ws_test.html` -> prints every WebSocket message
 - `GET /favicon.ico` -> alias to `/ui/favicon.svg` (tab icon)
-- `GET /healthz` -> status/metrics, for example:
-  ```json
-  {
-    "status": "ok",
-    "clients": 1,
-    "udp_received_total": 123,
-    "validated_total": 120,
-    "dropped_total": 3,
-    "alerts_total": 42,
-    "eps_1s": 1.0,
-    "eps_10s": 0.8,
-    "last_packet_age_s": 0.14
-  }
-  ```
-- `POST /ingest` -> accepts JSON; validates as **ZMeta** or auto-**adapts** then validates
-- `GET /rules` -> list loaded rule names
-- `POST /rules/reload` -> reload `config/rules.yaml` without restarting
+- `GET /api` -> legacy redirect to `/api/v1/status`
+- `GET /healthz` -> legacy redirect to `/api/v1/healthz`
+- `GET /api/v1/status` -> lightweight service status (`{ "status": ..., "clients": ... }`)
+- `GET /api/v1/healthz` -> detailed ingest/WebSocket metrics
+- `POST /api/v1/ingest` -> accepts JSON; validates as **ZMeta** or auto-**adapts** then validates
+- `GET /api/v1/rules` -> list loaded rule names
+- `POST /api/v1/rules/reload` -> reload `config/rules.yaml` without restarting
 
 ---
 
