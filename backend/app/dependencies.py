@@ -2,32 +2,35 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
-from tools.recorder import NDJSONRecorder, recorder
-from tools.rules import rules
+from fastapi import Depends
+
+from tools.recorder import NDJSONRecorder
+from tools.rules import Rules
 
 from .config import AUTH_HEADER, auth_enabled, verify_shared_secret
-from .state import AlertDeduper, Stats, deduper, stats
-from .ws import WSHub, hub
+from .services import Services, get_services
+from .state import AlertDeduper, Stats
+from .ws import WSHub
 
 
-def get_stats() -> Stats:
-    return stats
+def get_stats(services: Services = Depends(get_services)) -> Stats:
+    return services.stats
 
 
-def get_ws_hub() -> WSHub:
-    return hub
+def get_ws_hub(services: Services = Depends(get_services)) -> WSHub:
+    return services.hub
 
 
-def get_deduper() -> AlertDeduper:
-    return deduper
+def get_deduper(services: Services = Depends(get_services)) -> AlertDeduper:
+    return services.deduper
 
 
-def get_recorder() -> NDJSONRecorder:
-    return recorder
+def get_recorder(services: Services = Depends(get_services)) -> NDJSONRecorder:
+    return services.recorder
 
 
-def get_rules():
-    return rules
+def get_rules(services: Services = Depends(get_services)) -> Rules:
+    return services.rules
 
 
 def get_auth_enabled() -> bool:

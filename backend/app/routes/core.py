@@ -5,8 +5,6 @@ from typing import Dict
 
 from fastapi import APIRouter, Depends
 
-from schemas.zmeta import SUPPORTED_SCHEMA_VERSIONS
-
 from ..config import (
     ALLOWED_ORIGINS,
     APP_TITLE,
@@ -18,15 +16,16 @@ from ..dependencies import get_auth_enabled, get_stats, get_ws_hub
 from ..state import Stats
 from ..ws import WSHub
 
-router = APIRouter()
+status_router = APIRouter(prefix='/status', tags=['status'])
+health_router = APIRouter(prefix='/healthz', tags=['status'])
 
 
-@router.get('/status')
+@status_router.get('')
 def api_status(hub: WSHub = Depends(get_ws_hub)) -> Dict[str, object]:
     return {'status': f'{APP_TITLE} running', 'clients': len(hub.clients)}
 
 
-@router.get('/healthz')
+@health_router.get('')
 async def healthz(
     stats: Stats = Depends(get_stats),
     hub: WSHub = Depends(get_ws_hub),
@@ -50,8 +49,7 @@ async def healthz(
         'auth_header': AUTH_HEADER if auth_enabled else None,
         'allowed_origins': ALLOWED_ORIGINS,
         'environment': ENVIRONMENT,
-        'supported_schema_versions': sorted(SUPPORTED_SCHEMA_VERSIONS),
     }
 
 
-__all__ = ['router']
+__all__ = ['status_router', 'health_router']

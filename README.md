@@ -148,17 +148,17 @@ When hardening a deployment, also tighten `ZMETA_CORS_ORIGINS` and set `ZMETA_EN
 
 ## Endpoints
 
-- `GET /` -> redirects to `/ui/live_map.html`
-- `GET /ui/live_map.html` -> live map UI (Leaflet + WS)
-- `GET /ui/ws_test.html` -> prints every WebSocket message
-- `GET /favicon.ico` -> alias to `/ui/favicon.svg` (tab icon)
-- `GET /api` -> legacy redirect to `/api/v1/status`
-- `GET /healthz` -> legacy redirect to `/api/v1/healthz`
-- `GET /api/v1/status` -> lightweight service status (`{ "status": ..., "clients": ... }`)
-- `GET /api/v1/healthz` -> detailed ingest/WebSocket metrics
-- `POST /api/v1/ingest` -> accepts JSON; validates as **ZMeta** or auto-**adapts** then validates
-- `GET /api/v1/rules` -> list loaded rule names
-- `POST /api/v1/rules/reload` -> reload `config/rules.yaml` without restarting
+- GET / -> redirects to /ui/live_map.html
+- GET /ui/live_map.html -> live map UI (Leaflet + WS)
+- GET /ui/ws_test.html -> prints every WebSocket message
+- GET /favicon.ico -> alias to /ui/favicon.svg (tab icon)
+- GET /api -> legacy redirect to /api/v1/status
+- GET /healthz -> legacy redirect to /api/v1/healthz
+- GET /api/v1/status -> lightweight service status ({ "status": ..., "clients": ... })
+- GET /api/v1/healthz -> detailed ingest/WebSocket metrics
+- POST /api/v1/ingest -> accepts JSON; validates as **ZMeta** or auto-**adapts** then validates
+- GET /api/v1/rules -> list loaded rule names
+- POST /api/v1/rules/reload -> reload config/rules.yaml without restarting
 
 ---
 
