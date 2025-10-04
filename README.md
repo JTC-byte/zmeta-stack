@@ -312,17 +312,13 @@ pip-compile --upgrade --generate-hashes -o requirements.lock.txt requirements.tx
 
 ---
 
-## ðŸš§ Future Updates
+## Future Updates
 
-Hereâ€™s whatâ€™s coming soon, in order of priority:
+Here is what we have queued up, in rough priority order:
 
-1. **Phone Tracker Integration** â€“ ingest mobile device location feeds into ZMeta for live map display and alerting.
-2. **GUI Auth Support** â€“ input field for shared-secret, secure header/query handling in the control panel and dashboard.
-3. **Expanded Health Dashboard** â€“ parsed metrics for adapter counts, WebSocket queue drops, and per-client stats (beyond raw JSON).
-4. **Rules Management UI** â€“ list, add, and reload detection rules directly from the GUI instead of YAML-only workflows.
-5. **Electron/Tauri Frontend** â€“ TypeScript/React interface packaged as a cross-platform desktop app (with built-in map, health, and rules pages).
-6. **Enhanced Visualization** - clustering, timeline playback, and live metrics charts.
-
-
-
-
+1. **Phone Tracker Integration** – ingest mobile device feeds for live map display and alerting.
+2. **GUI Auth Support** – shared-secret entry in the desktop control panel with secure header/query handling.
+3. **Expanded Health Dashboard** – surface adapter counts, WebSocket queue drops, and per-client stats.
+4. **Rules Management UI** – list/add/reload detection rules from the GUI instead of YAML-only workflow.
+5. **Electron/Tauri Frontend** – TypeScript/React desktop bundle with built-in map, health, and rules pages.
+6. **Enhanced Visualization** – clustering, timeline playback, and live metrics charts.
