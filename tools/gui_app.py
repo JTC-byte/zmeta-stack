@@ -188,6 +188,11 @@ class ZMetaApp(ttk.Frame):
         self.secret_var = tk.StringVar(value="")
         self.ws_status_var = tk.StringVar(value="disconnected")
 
+        self.live_updates_var = tk.BooleanVar(value=True)
+        self.live_toggle_btn: ttk.Button | None = None
+        self.max_paused_messages = 2000
+        self._paused_messages: deque[dict[str, Any]] = deque(maxlen=self.max_paused_messages)
+
         self.alerts: deque[dict[str, Any]] = deque(maxlen=200)
         self.alert_total_count = 0
         self.alert_total_var = tk.StringVar(value="Alerts: 0")
@@ -269,7 +274,7 @@ class ZMetaApp(ttk.Frame):
 
         top = ttk.Frame(self, padding=(0, 0, 0, 10))
         top.grid(row=0, column=0, sticky="ew")
-        for col in range(8):
+        for col in range(10):
             top.columnconfigure(col, weight=1 if col in (1, 3) else 0)
 
         ttk.Label(top, text="Base URL:").grid(row=0, column=0, padx=(0, 6))
@@ -284,8 +289,10 @@ class ZMetaApp(ttk.Frame):
         ttk.Button(top, text="Refresh Health", command=self.fetch_health).grid(row=0, column=4, padx=6)
         ttk.Button(top, text="Connect WS", command=self.connect_ws).grid(row=0, column=5, padx=(6, 0))
         ttk.Button(top, text="Disconnect", command=self.disconnect_ws).grid(row=0, column=6, padx=(6, 0))
-        ttk.Label(top, text="WS:").grid(row=0, column=7, padx=(12, 4))
-        ttk.Label(top, textvariable=self.ws_status_var).grid(row=0, column=8, sticky="w")
+        self.live_toggle_btn = ttk.Button(top, text="Pause Live", command=self._toggle_live_updates)
+        self.live_toggle_btn.grid(row=0, column=7, padx=(12, 0))
+        ttk.Label(top, text="WS:").grid(row=0, column=8, padx=(12, 4))
+        ttk.Label(top, textvariable=self.ws_status_var).grid(row=0, column=9, sticky="w")
 
         notebook = ttk.Notebook(self)
         notebook.grid(row=1, column=0, sticky="nsew")
@@ -543,14 +550,13 @@ class ZMetaApp(ttk.Frame):
             return
         if not isinstance(data, dict):
             return
+
+        if not self.live_updates_var.get():
+            self._paused_messages.append(data)
+            return
+
         try:
-            if data.get("type") == "alert":
-                self._record_alert(data)
-                self._spawn_alert_marker(data)
-            elif data.get("location"):
-                self._upsert_track(data)
-            else:
-                self._append_log(f"[WS] Ignored payload without location: {data}")
+            self._dispatch_payload(data)
         except Exception as exc:
             self._append_log(f"[WS MESSAGE ERROR] {exc}")
 
@@ -729,6 +735,35 @@ class ZMetaApp(ttk.Frame):
         print(text)
         self._refresh_log_widget()
 
+    def _dispatch_payload(self, data: dict[str, Any]) -> None:
+        if data.get("type") == "alert":
+            self._record_alert(data)
+            self._spawn_alert_marker(data)
+        elif data.get("location"):
+            self._upsert_track(data)
+        else:
+            self._append_log(f"[WS] Ignored payload without location: {data}")
+
+    def _flush_paused_messages(self) -> None:
+        if not self._paused_messages:
+            return
+        pending = list(self._paused_messages)
+        self._paused_messages.clear()
+        for payload in pending:
+            try:
+                self._dispatch_payload(payload)
+            except Exception as exc:
+                self._append_log(f"[WS MESSAGE ERROR] {exc}")
+
+    def _toggle_live_updates(self) -> None:
+        enabled = not self.live_updates_var.get()
+        self.live_updates_var.set(enabled)
+        if self.live_toggle_btn is not None:
+            self.live_toggle_btn.configure(text="Pause Live" if enabled else "Resume Live")
+        state = "resumed" if enabled else "paused"
+        self._append_log(f"[UI] Live updates {state}")
+        if enabled:
+            self._flush_paused_messages()
 
     def _refresh_log_widget(self) -> None:
         if not self.log_text:

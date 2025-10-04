@@ -191,7 +191,8 @@ Resulting ZMeta is:
 Map UI shows:
 - **Pulse rings** per alert (severity-colored)  
 - **Stats panel** (WS status, clients, EPS, alerts)  
-- Marker **tooltips** (freq/RSSI/confidence, etc.)
+- Marker **tooltips** with modality plus relative/ISO timestamps  
+- Track trails with age-based fade, plus auto-follow and Fit All controls
 
 Reload rules at runtime:
 ```powershell
@@ -291,8 +292,18 @@ pip-compile --upgrade --generate-hashes -o requirements.lock.txt requirements.tx
 
 
 
-\n## Replay recorded data\n\n- bash: \scripts/replay.sh data/records/20250101_12.ndjson http://127.0.0.1:8000\\n- PowerShell: \scripts/replay.ps1 -Path data/records/20250101_12.ndjson -BaseUrl http://127.0.0.1:8000\\n\n
-\n## Containers\n\n- Build locally: \docker build -t zmeta .\\n- Dev compose: \docker-compose up\ (hot reload on port 8000).\n\n
+
+## Replay recorded data
+
+- Bash: `scripts/replay.sh data/records/20250101_12.ndjson http://127.0.0.1:8000`
+- PowerShell: `scripts/replay.ps1 -Path data/records/20250101_12.ndjson -BaseUrl http://127.0.0.1:8000`
+
+
+## Containers
+
+- Build locally: `docker build -t zmeta .`
+- Dev compose: `docker-compose up` (hot reload on port 8000).
+
 
 ---
 
@@ -305,7 +316,7 @@ Here’s what’s coming soon, in order of priority:
 3. **Expanded Health Dashboard** – parsed metrics for adapter counts, WebSocket queue drops, and per-client stats (beyond raw JSON).
 4. **Rules Management UI** – list, add, and reload detection rules directly from the GUI instead of YAML-only workflows.
 5. **Electron/Tauri Frontend** – TypeScript/React interface packaged as a cross-platform desktop app (with built-in map, health, and rules pages).
-6. **Enhanced Visualization** – richer map features (track trails, clustering, severity color-coding) and live metrics charts.
+6. **Enhanced Visualization** - clustering, timeline playback, and live metrics charts.
 
 
 
