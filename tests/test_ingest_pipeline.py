@@ -1,4 +1,4 @@
-import copy
+﻿import copy
 
 import pytest
 
@@ -12,7 +12,7 @@ def anyio_backend():
 
 @pytest.mark.anyio
 async def test_ingest_payload_broadcasts_and_records(monkeypatch):
-    stats_snapshot = copy.deepcopy(main.stats.__dict__)
+    metrics_snapshot = main.metrics.snapshot()
     dedupe_snapshot = copy.deepcopy(main.deduper.__dict__)
 
     broadcast_calls: list[str] = []
@@ -63,12 +63,12 @@ async def test_ingest_payload_broadcasts_and_records(monkeypatch):
         assert enqueue_calls == [result.model_dump_json()]
         assert broadcast_calls[1] == main._dumps(alerts[0])
 
-        assert main.stats.validated_total == stats_snapshot["validated_total"] + 1
-        assert main.stats.alerts_total == stats_snapshot["alerts_total"] + 1
+        after_snapshot = main.metrics.snapshot()
+        assert after_snapshot.validated_total == metrics_snapshot.validated_total + 1
+        assert after_snapshot.alerts_total == metrics_snapshot.alerts_total + 1
         assert main.deduper.total_checked == dedupe_snapshot["total_checked"] + 1
         assert main.deduper.total_suppressed == dedupe_snapshot["total_suppressed"]
     finally:
-        main.stats.__dict__.clear()
-        main.stats.__dict__.update(stats_snapshot)
+        main.metrics.restore(metrics_snapshot)
         main.deduper.__dict__.clear()
         main.deduper.__dict__.update(dedupe_snapshot)

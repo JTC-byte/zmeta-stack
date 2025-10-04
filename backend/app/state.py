@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import time
 from collections import Counter, deque
@@ -55,7 +55,6 @@ class Stats:
         return round(count / max(1, window_s), 2)
 
 
-stats = Stats()
 
 
 class AlertDeduper:

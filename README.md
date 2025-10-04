@@ -1,4 +1,4 @@
-# ZMeta Stack - Live Map - Ingest - Rules - Alerts
+﻿# ZMeta Stack - Live Map - Ingest - Rules - Alerts
 
 A lightweight ISR workbench:
 **ingest -> normalize to ZMeta -> rules/alerts -> WebSocket -> live Leaflet map -> record to NDJSON**.
@@ -12,6 +12,10 @@ A lightweight ISR workbench:
 > Dev defaults: permissive CORS, no auth - great for local work. Lock down before exposing externally.
 
 ---
+## Documentation
+
+- [Ingest -> Rules -> Alerts pipeline](docs/ingest_pipeline.md) (served live at `/docs/local/ingest_pipeline` and aliased at `/docs/pipeline`)
+
 
 ## Quick start (Windows PowerShell)
 
@@ -70,6 +74,7 @@ python -m tools.simulators.klv
 ```powershell
 .\.venv\Scripts\Activate.ps1
 python -m tools.gui_app
+# Docs button opens http://127.0.0.1:8000/docs/pipeline
 ```
 
 
@@ -84,7 +89,7 @@ $body = @{
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/ingest" -Method POST -ContentType "application/json" -Body $body
 ```
 
-You should see a marker near **[35.271, -78.637]** and **pulse rings** on alerts  
+You should see a marker near **[35.271, -78.637]** (info markers = blue, warn = orange, crit = red).
 (blue=info, orange=warn, red=crit).
 
 ---
@@ -189,7 +194,7 @@ Resulting ZMeta is:
   - AOI example near default sim coordinates
 
 Map UI shows:
-- **Pulse rings** per alert (severity-colored)  
+You should see a marker near **[35.271, -78.637]** (info markers = blue, warn = orange, crit = red).
 - **Stats panel** (WS status, clients, EPS, alerts)  
 - Marker **tooltips** with modality plus relative/ISO timestamps  
 - Track trails with age-based fade, plus auto-follow and Fit All controls
@@ -307,15 +312,15 @@ pip-compile --upgrade --generate-hashes -o requirements.lock.txt requirements.tx
 
 ---
 
-## 🚧 Future Updates
+## ðŸš§ Future Updates
 
-Here’s what’s coming soon, in order of priority:
+Hereâ€™s whatâ€™s coming soon, in order of priority:
 
-1. **Phone Tracker Integration** – ingest mobile device location feeds into ZMeta for live map display and alerting.
-2. **GUI Auth Support** – input field for shared-secret, secure header/query handling in the control panel and dashboard.
-3. **Expanded Health Dashboard** – parsed metrics for adapter counts, WebSocket queue drops, and per-client stats (beyond raw JSON).
-4. **Rules Management UI** – list, add, and reload detection rules directly from the GUI instead of YAML-only workflows.
-5. **Electron/Tauri Frontend** – TypeScript/React interface packaged as a cross-platform desktop app (with built-in map, health, and rules pages).
+1. **Phone Tracker Integration** â€“ ingest mobile device location feeds into ZMeta for live map display and alerting.
+2. **GUI Auth Support** â€“ input field for shared-secret, secure header/query handling in the control panel and dashboard.
+3. **Expanded Health Dashboard** â€“ parsed metrics for adapter counts, WebSocket queue drops, and per-client stats (beyond raw JSON).
+4. **Rules Management UI** â€“ list, add, and reload detection rules directly from the GUI instead of YAML-only workflows.
+5. **Electron/Tauri Frontend** â€“ TypeScript/React interface packaged as a cross-platform desktop app (with built-in map, health, and rules pages).
 6. **Enhanced Visualization** - clustering, timeline playback, and live metrics charts.
 
 

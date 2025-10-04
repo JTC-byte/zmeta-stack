@@ -1,4 +1,4 @@
-# backend/app/main.py
+﻿# backend/app/main.py
 from __future__ import annotations
 
 import logging
@@ -22,8 +22,9 @@ from .ingest import ingest_payload as _ingest_payload
 from .ingest import validate_or_adapt as _validate_or_adapt
 from .json_utils import dumps as _dumps
 from .lifespan import app_lifespan
-from .routes import api_v1, root_router, ws_router
-from .state import AlertDeduper, deduper, stats
+from .routes import api_v1, docs_router, pipeline_docs, root_router, ws_router
+from .metrics import metrics
+from .state import AlertDeduper, deduper
 from .ws import hub
 
 log = logging.getLogger('zmeta')
@@ -47,6 +48,8 @@ app.add_middleware(
 app.include_router(root_router)
 app.include_router(api_v1)
 app.include_router(ws_router)
+app.include_router(docs_router)
+app.add_api_route('/docs/pipeline', pipeline_docs)
 
 __all__ = [
     'ZMeta',
@@ -62,5 +65,7 @@ __all__ = [
     'recorder',
     'log',
     'rules',
-    'stats',
+    'metrics',
 ]
+
+

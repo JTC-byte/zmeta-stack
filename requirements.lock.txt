@@ -23,7 +23,9 @@ pillow==11.3.0
 platformdirs==4.4.0
 pluggy==1.6.0
 pydantic==2.11.9
+pydantic-settings==2.11.0
 pydantic_core==2.33.2
+markdown==3.9
 Pygments==2.19.2
 pyperclip==1.11.0
 pytest==8.4.2

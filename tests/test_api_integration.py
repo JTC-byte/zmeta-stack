@@ -1,4 +1,4 @@
-import asyncio
+﻿import asyncio
 import copy
 import json
 from contextlib import suppress
@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from backend.app import lifespan
 from backend.app.config import WS_GREETING
 from backend.app.main import ZMeta, app, _dumps, deduper, hub, recorder, rules
-from backend.app.state import stats
+from backend.app.metrics import metrics
 
 
 @pytest.fixture
@@ -55,8 +55,38 @@ async def test_health_endpoint(async_client):
 
 
 @pytest.mark.anyio
+async def test_docs_index(async_client):
+    response = await async_client.get("/docs/local")
+    assert response.status_code == 200
+    body = response.text.lower()
+    assert "zmeta documentation" in body
+    assert "/docs/local/ingest_pipeline" in body
+
+
+@pytest.mark.anyio
+async def test_docs_slug(async_client):
+    response = await async_client.get("/docs/local/ingest_pipeline")
+    assert response.status_code == 200
+    assert "pipeline" in response.text.lower()
+
+
+@pytest.mark.anyio
+async def test_docs_pipeline_alias(async_client):
+    response = await async_client.get("/docs/pipeline")
+    assert response.status_code == 200
+    assert "pipeline" in response.text.lower()
+
+
+@pytest.mark.anyio
+async def test_docs_missing(async_client):
+    response = await async_client.get("/docs/local/does-not-exist")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Document not found"
+
+
+@pytest.mark.anyio
 async def test_ingest_endpoint(async_client, monkeypatch):
-    stats_snapshot = copy.deepcopy(stats.__dict__)
+    metrics_snapshot = metrics.snapshot()
     dedupe_snapshot = copy.deepcopy(deduper.__dict__)
 
     broadcast_calls: list[str] = []
@@ -105,24 +135,24 @@ async def test_ingest_endpoint(async_client, monkeypatch):
         assert first_call["sequence"] is not None
         assert json.loads(enqueue_calls[0])["sequence"] == first_call["sequence"]
         assert broadcast_calls[1] == _dumps(alerts[0])
-        assert stats.validated_total == stats_snapshot["validated_total"] + 1
+        after_snapshot = metrics.snapshot()
+        assert after_snapshot.validated_total == metrics_snapshot.validated_total + 1
     finally:
-        stats.__dict__.clear()
-        stats.__dict__.update(stats_snapshot)
+        metrics.restore(metrics_snapshot)
         deduper.__dict__.clear()
         deduper.__dict__.update(dedupe_snapshot)
 
 
+async def _noop_consumer(queue):
+    try:
+        while True:
+            await asyncio.sleep(0.5)
+    except asyncio.CancelledError:
+        pass
+
+
 def test_websocket_echo(monkeypatch):
     monkeypatch.setattr(lifespan, "UDP_PORT", 0, raising=False)
-
-    async def _noop_consumer(queue):
-        try:
-            while True:
-                await asyncio.sleep(0.5)
-        except asyncio.CancelledError:
-            pass
-
     monkeypatch.setattr(lifespan, "udp_consumer", _noop_consumer, raising=False)
 
     client = TestClient(app)
