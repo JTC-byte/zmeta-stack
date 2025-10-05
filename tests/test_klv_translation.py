@@ -1,9 +1,8 @@
-﻿from datetime import datetime
+from datetime import datetime
 
 import pytest
 
 from tools.translators.klv_to_zmeta import klv_to_zmeta
-from schemas.zmeta import SUPPORTED_SCHEMA_VERSIONS
 
 
 def test_klv_payload_translates_to_zmeta():
@@ -38,4 +37,5 @@ def test_klv_missing_timestamp_gets_default():
     assert isinstance(zmeta.timestamp, datetime)
     assert zmeta.timestamp.tzinfo is not None
     assert zmeta.modality == "eo"
+
 

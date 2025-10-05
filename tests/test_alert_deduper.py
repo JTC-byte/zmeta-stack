@@ -1,7 +1,5 @@
 ﻿import time
 
-import pytest
-
 from backend.app.main import AlertDeduper
 
 

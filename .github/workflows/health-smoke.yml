@@ -1,4 +1,4 @@
-﻿name: Health Smoke Test
+name: Health Smoke Test
 
 on:
   push:
@@ -17,19 +17,24 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Smoke test health endpoint
+      - name: Smoke test critical endpoints
         run: |
           set -euo pipefail
           python -m uvicorn backend.app.main:app --port 8001 --log-level warning &
           UVICORN_PID=$!
           trap 'kill $UVICORN_PID 2>/dev/null || true' EXIT
+          success=0
           for attempt in $(seq 1 15); do
             if python scripts/run_health_check.py --base-url http://127.0.0.1:8001 --output status; then
               echo "Health check succeeded on attempt $attempt"
-              exit 0
+              success=1
+              break
             fi
             echo "Health check attempt $attempt failed; retrying..." >&2
             sleep 1
           done
-          echo 'Health check failed after 15 attempts' >&2
-          exit 1
+          if [ "$success" -ne 1 ]; then
+            echo 'Health check failed after 15 attempts' >&2
+            exit 1
+          fi
+          python scripts/check_endpoints.py --base-url http://127.0.0.1:8001 --retries 5 --delay 1

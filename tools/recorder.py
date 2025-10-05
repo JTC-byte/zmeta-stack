@@ -1,12 +1,16 @@
-﻿from __future__ import annotations
+from __future__ import annotations
+
 """Async NDJSON recorder with optional retention trimming."""
-import asyncio, json
+
+import asyncio
+import json
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
 
 log = logging.getLogger("zmeta.recorder")
+
 
 class NDJSONRecorder:
     def __init__(self, base_dir: str | Path = "data/records", max_age_hours: float | None = None):
@@ -19,11 +23,11 @@ class NDJSONRecorder:
         self.dropped_total = 0
         self.max_age = max_age_hours if max_age_hours and max_age_hours > 0 else None
 
-    async def start(self):
+    async def start(self) -> None:
         self.base_dir.mkdir(parents=True, exist_ok=True)
         self._task = asyncio.create_task(self._run())
 
-    async def stop(self):
+    async def stop(self) -> None:
         if self._task:
             self._task.cancel()
             try:
@@ -35,7 +39,7 @@ class NDJSONRecorder:
             self._fh.close()
             self._fh = None
 
-    async def enqueue(self, obj):
+    async def enqueue(self, obj: str | dict[str, object]) -> None:
         if isinstance(obj, str):
             line = obj
         else:
@@ -51,7 +55,7 @@ class NDJSONRecorder:
             return
         await asyncio.sleep(0)
 
-    def _rollover_if_needed(self, now: datetime):
+    def _rollover_if_needed(self, now: datetime) -> None:
         key = now.strftime("%Y%m%d_%H")
         if key != self._hour_key or self._fh is None:
             if self._fh:
@@ -63,7 +67,7 @@ class NDJSONRecorder:
         if self.max_age:
             self._prune_old_files(now)
 
-    def _prune_old_files(self, now: datetime):
+    def _prune_old_files(self, now: datetime) -> None:
         cutoff = now - timedelta(hours=self.max_age)
         for path in self.base_dir.glob("*.ndjson"):
             try:
@@ -73,7 +77,7 @@ class NDJSONRecorder:
             except Exception as exc:
                 log.warning("Failed pruning %s: %s", path, exc)
 
-    async def _run(self):
+    async def _run(self) -> None:
         while True:
             line = await self.queue.get()
             now = datetime.now(timezone.utc)
@@ -88,6 +92,7 @@ class NDJSONRecorder:
             finally:
                 self.queue.task_done()
 
+
 max_age_env = os.getenv("ZMETA_RECORDER_RETENTION_HOURS")
 try:
     max_age_hours = float(max_age_env) if max_age_env else None
@@ -96,4 +101,3 @@ except ValueError:
     max_age_hours = None
 
 recorder = NDJSONRecorder(max_age_hours=max_age_hours)
-

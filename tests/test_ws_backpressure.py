@@ -1,8 +1,6 @@
 import asyncio
 import logging
 
-import pytest
-
 from backend.app import ws
 from backend.app.metrics import metrics
 
@@ -56,3 +54,4 @@ def test_backpressure_disconnects_slow_client(caplog):
             await hub.disconnect(websocket)
 
     asyncio.run(scenario())
+

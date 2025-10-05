@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 """Simple desktop GUI for interacting with the ZMeta backend."""
 
@@ -25,7 +25,6 @@ from .state import (
     AlertStore,
     LogBuffer,
     TrackStore,
-    MODALITY_COLORS,
     SEVERITY_COLORS,
     modality_color,
     resolve_track_id,
@@ -933,6 +932,10 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+
 
 
 

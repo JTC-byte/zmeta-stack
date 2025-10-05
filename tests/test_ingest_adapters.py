@@ -35,6 +35,7 @@ def test_adapt_rf_payload(simulated_rf_payload):
     adapter, adapted = result
     assert adapter == "simulated_v1_rf"
     zmeta = ZMeta.model_validate(adapted)
+    assert zmeta.modality == "rf"
     assert adapted["data"]["value"]["frequency_hz"] == 915200000
     assert adapted["data"]["value"]["rssi_dbm"] == pytest.approx(-42.5)
     assert adapted["confidence"] == pytest.approx(0.92)
