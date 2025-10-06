@@ -1,5 +1,4 @@
 import json
-import os
 import random
 import socket
 import time
@@ -7,11 +6,14 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 
+from backend.app.config import get_settings
+
 load_dotenv()
+settings = get_settings()
 
 # UDP config
-UDP_IP = os.getenv("ZMETA_SIM_UDP_HOST", os.getenv("ZMETA_UDP_TARGET_HOST", "127.0.0.1"))
-UDP_PORT = int(os.getenv("ZMETA_UDP_PORT", "5005"))
+UDP_IP = settings.simulator_target_host()
+UDP_PORT = settings.udp_port
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 

@@ -128,17 +128,22 @@ Environment variables let you tune ports, URLs, and simulator targets:
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `ZMETA_APP_TITLE` | `ZMeta Backend` | UI title surfaced via `/api/v1/status` and docs. |
 | `ZMETA_UDP_HOST` | `0.0.0.0` | Bind address for the UDP listener. |
 | `ZMETA_UDP_PORT` | `5005` | UDP port for ingest + simulators. |
+| `ZMETA_UDP_QUEUE_MAX` | `4096` | Max UDP queue depth for the background listener. |
 | `ZMETA_UI_BASE_URL` | `http://127.0.0.1:8000` | Base URL used for helper prints and GUI hints. |
 | `ZMETA_WS_GREETING` | `Connected to ZMeta WebSocket` | Text sent after a client connects. |
 | `ZMETA_CORS_ORIGINS` | `*` | Comma-separated origins allowed by FastAPI CORS middleware. |
-| `ZMETA_SIM_UDP_HOST` | `127.0.0.1` | Address simulators send UDP packets to (falls back to `ZMETA_UDP_TARGET_HOST`). |
-| `ZMETA_UDP_TARGET_HOST` | `127.0.0.1` | Override for simulator UDP target host. |
+| `ZMETA_SIM_UDP_HOST` | (unset) | Optional override for simulator UDP target host. |
+| `ZMETA_UDP_TARGET_HOST` | `127.0.0.1` | Default simulator UDP target when override not set. |
 | `ZMETA_SHARED_SECRET` | (empty) | Optional shared secret required for `/ingest` and `/ws`. |
 | `ZMETA_AUTH_HEADER` | `x-zmeta-secret` | Header name to read the shared secret from. |
 | `ZMETA_ENV` | `dev` | Hint for environment-specific behavior (e.g., prod CORS tightening). |
 | `ZMETA_WS_QUEUE` | `64` | Max per-client WebSocket buffer size before dropping messages. |
+| `ZMETA_RECORDER_RETENTION_HOURS` | (unset) | If set, older NDJSON files are pruned after this many hours. |
+
+A starter `.env.example` is included - copy it to `.env` and tweak as needed.
 
 
 ### Secure mode

@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from backend.app.config import settings
 
 log = logging.getLogger("zmeta.recorder")
 
@@ -93,11 +94,4 @@ class NDJSONRecorder:
                 self.queue.task_done()
 
 
-max_age_env = os.getenv("ZMETA_RECORDER_RETENTION_HOURS")
-try:
-    max_age_hours = float(max_age_env) if max_age_env else None
-except ValueError:
-    log.warning("Invalid ZMETA_RECORDER_RETENTION_HOURS=%s", max_age_env)
-    max_age_hours = None
-
-recorder = NDJSONRecorder(max_age_hours=max_age_hours)
+recorder = NDJSONRecorder(max_age_hours=settings.recorder_retention_hours)
