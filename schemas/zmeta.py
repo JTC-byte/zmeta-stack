@@ -29,11 +29,15 @@ class RFData(BaseModel):
     type: Literal["burst", "tone", "sweep", "unk"] = "burst"
     freq_hz: float                            # center frequency (Hz)
     bw_hz: Optional[float] = None             # bandwidth (Hz)
-    power_dbm: Optional[float] = None         # transmit or received power (dBm)
+    tx_power_dbm: Optional[float] = None      # transmitted power (dBm)
+    rx_power_dbm: Optional[float] = None      # received power (dBm)
+    power_dbm: Optional[float] = None         # generic/unknown power measurement (legacy)
     rssi_dbm: Optional[float] = None          # received signal strength (dBm)
     doa_deg: Optional[float] = None           # direction of arrival (bearing)
     snr_db: Optional[float] = None            # signal-to-noise ratio (dB)
     path_loss_db: Optional[float] = None      # optional derived propagation loss
+    polarization: Optional[str] = None        # e.g., "vertical", "horizontal", "circular"
+    antenna_gain_dbi: Optional[float] = None  # TX/RX antenna gain (dBi)
     confidence: Optional[float] = Field(None, ge=0, le=1)
 
 
@@ -185,11 +189,15 @@ def _sensor_payload_to_data(modality: str, payload: SensorPayload) -> SensorData
             {
                 "frequency_hz": payload.freq_hz,
                 "bandwidth_hz": payload.bw_hz,
+                "tx_power_dbm": payload.tx_power_dbm,
+                "rx_power_dbm": payload.rx_power_dbm,
                 "power_dbm": payload.power_dbm,
                 "rssi_dbm": payload.rssi_dbm,
                 "doa_deg": payload.doa_deg,
                 "snr_db": payload.snr_db,
                 "path_loss_db": payload.path_loss_db,
+                "polarization": payload.polarization,
+                "antenna_gain_dbi": payload.antenna_gain_dbi,
             }
         )
         dtype = f"{modality_norm}_{payload.type}".strip("_")

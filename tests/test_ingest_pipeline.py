@@ -114,6 +114,10 @@ async def test_ingest_payload_v11(monkeypatch):
             "type": "burst",
             "freq_hz": 915_000_000,
             "rssi_dbm": -52.0,
+            "tx_power_dbm": 18.5,
+            "rx_power_dbm": -40.2,
+            "polarization": "vertical",
+            "antenna_gain_dbi": 6.0,
             "confidence": 0.93,
         },
         "provenance": {
@@ -129,6 +133,10 @@ async def test_ingest_payload_v11(monkeypatch):
         assert result.data.type == "rf_burst"
         assert result.data.value["frequency_hz"] == pytest.approx(915_000_000)
         assert result.data.value["rssi_dbm"] == pytest.approx(-52.0)
+        assert result.data.value["tx_power_dbm"] == pytest.approx(18.5)
+        assert result.data.value["rx_power_dbm"] == pytest.approx(-40.2)
+        assert result.data.value["polarization"] == "vertical"
+        assert result.data.value["antenna_gain_dbi"] == pytest.approx(6.0)
         assert result.provenance is not None
         assert result.provenance.source_format == "zmeta"
 
