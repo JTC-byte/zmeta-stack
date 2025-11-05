@@ -1,5 +1,5 @@
-from typing import Optional, List, Union, Literal
-from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Union, Literal, Any
+from pydantic import BaseModel, Field, field_validator, ValidationError
 from datetime import datetime
 
 
@@ -109,6 +109,13 @@ class ZMeta(BaseModel):
     schema_version: str = "1.0"
     sequence: Optional[int] = None
     source_format: str
+    stream_id: Optional[str] = None
+    bundle_id: Optional[str] = None
+    partition_key: Optional[str] = None
+    provenance: Optional[Provenance] = None
+    transport: Optional[TransportHealth] = None
+    security: Optional[SecurityStamp] = None
+    fusion: Optional[FusionContext] = None
 
     @field_validator('modality', mode='after')
     def validate_modality(cls, v: str) -> str:
@@ -165,3 +172,98 @@ class ZMetaV11(BaseModel):
         if v not in SUPPORTED_SCHEMA_VERSIONS:
             raise ValueError(f"Unsupported schema_version: {v}")
         return v
+
+
+def _strip_none(data: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in data.items() if v is not None}
+
+
+def _sensor_payload_to_data(modality: str, payload: SensorPayload) -> SensorData:
+    modality_norm = modality.lower()
+    if isinstance(payload, RFData):
+        value = _strip_none(
+            {
+                "frequency_hz": payload.freq_hz,
+                "bandwidth_hz": payload.bw_hz,
+                "power_dbm": payload.power_dbm,
+                "rssi_dbm": payload.rssi_dbm,
+                "doa_deg": payload.doa_deg,
+                "snr_db": payload.snr_db,
+                "path_loss_db": payload.path_loss_db,
+            }
+        )
+        dtype = f"{modality_norm}_{payload.type}".strip("_")
+        return SensorData(type=dtype, value=value, confidence=payload.confidence)
+
+    if isinstance(payload, ThermalData):
+        value = _strip_none({"bbox": payload.bbox, "temp_c": payload.temp_c})
+        dtype = f"{modality_norm}_{payload.type}".strip("_")
+        return SensorData(type=dtype, value=value, confidence=payload.confidence)
+
+    if isinstance(payload, AcousticData):
+        value = _strip_none(
+            {
+                "doa_deg": payload.doa_deg,
+                "class_label": payload.class_label,
+            }
+        )
+        dtype = f"{modality_norm}_{payload.type}".strip("_")
+        return SensorData(type=dtype, value=value, confidence=payload.confidence)
+
+    if isinstance(payload, EOIRData):
+        value = _strip_none(
+            {
+                "bbox": payload.bbox,
+                "class_label": payload.class_label,
+            }
+        )
+        dtype = f"{modality_norm}_{payload.type}".strip("_")
+        return SensorData(type=dtype, value=value, confidence=payload.confidence)
+
+    generic_value = payload.model_dump(exclude={"type", "confidence"}, exclude_none=True)
+    dtype = f"{modality_norm}_{getattr(payload, 'type', 'payload')}".strip("_")
+    return SensorData(
+        type=dtype,
+        value=generic_value or {},
+        confidence=getattr(payload, "confidence", None),
+    )
+
+
+def zmeta_from_v11(payload: ZMetaV11) -> ZMeta:
+    sensor_data = _sensor_payload_to_data(payload.modality, payload.data)
+    return ZMeta(
+        schema_version=payload.schema_version,
+        timestamp=payload.timestamp,
+        sensor_id=payload.sensor_id,
+        modality=payload.modality,
+        location=payload.location,
+        orientation=payload.orientation,
+        data=sensor_data,
+        pid=payload.pid,
+        tags=payload.tags,
+        note=payload.note,
+        sequence=payload.sequence,
+        source_format=payload.provenance.source_format,
+        stream_id=payload.stream_id,
+        bundle_id=payload.bundle_id,
+        partition_key=payload.partition_key,
+        provenance=payload.provenance,
+        transport=payload.transport,
+        security=payload.security,
+        fusion=payload.fusion,
+    )
+
+
+def parse_zmeta(payload: Any) -> ZMeta:
+    if isinstance(payload, ZMeta):
+        return payload
+    if isinstance(payload, ZMetaV11):
+        return zmeta_from_v11(payload)
+    try:
+        return ZMeta.model_validate(payload)
+    except ValidationError as first_error:
+        try:
+            v11 = ZMetaV11.model_validate(payload)
+        except ValidationError:
+            raise first_error
+        return zmeta_from_v11(v11)

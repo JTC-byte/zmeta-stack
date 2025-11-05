@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from schemas.zmeta import ZMeta
+from schemas.zmeta import ZMeta, parse_zmeta
 from tools.ingest_adapters import adapt_to_zmeta
 
 from .json_utils import dumps
@@ -25,15 +25,13 @@ def validate_or_adapt(payload: dict, services: Services | None = None) -> ZMeta:
     metrics = svc.metrics
     adapter_name = 'native'
     try:
-        zmeta_obj = ZMeta.model_validate(payload)
+        zmeta_obj = parse_zmeta(payload)
     except ValidationError:
         adapted = adapt_to_zmeta(payload)
         if adapted is None:
             raise
         adapter_name, adapted_payload = adapted
-        zmeta_obj = ZMeta.model_validate(adapted_payload)
-    else:
-        adapter_name = 'native'
+        zmeta_obj = parse_zmeta(adapted_payload)
 
     if zmeta_obj.sequence is None:
         zmeta_obj = zmeta_obj.model_copy(update={'sequence': metrics.next_sequence()})
