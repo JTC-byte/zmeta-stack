@@ -38,6 +38,7 @@ _ui_url = ui_url
 app = FastAPI(title=_app_title, lifespan=app_lifespan)
 
 app.mount('/ui', StaticFiles(directory='zmeta_map_dashboard', html=True), name='ui')
+app.mount('/assets', StaticFiles(directory='assets'), name='assets')
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,

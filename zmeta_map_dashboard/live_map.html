@@ -1,197 +1,797 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>ZMeta Live Map</title>
   <link rel="icon" type="image/svg+xml" href="/ui/favicon.svg" />
 
-  <!-- Leaflet CSS (with fallback) -->
   <link id="leaflet-css" rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity=""
-        crossorigin=""/>
+        crossorigin="" />
+
   <style>
-    html, body, #map { height: 100%; margin: 0; }
-    .info {
-      position: absolute; top:10px; left:10px;
-      background:#fff; padding:8px 10px; border-radius:8px;
-      box-shadow:0 2px 6px rgba(0,0,0,.2);
-      font:14px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      z-index:1000; pointer-events:none;
+    :root {
+      color-scheme: dark;
+      --bg: #0F1115;
+      --panel: #141922;
+      --text: #E8EDF3;
+      --subtext: #8B94A7;
+      --accent: #5B2E90;
+      --border: #1E2530;
+      --hover: #18202B;
+      --panel-radius: 14px;
+      --panel-border-width: 1px;
+      --panel-shadow: 0 20px 32px rgba(4, 8, 16, 0.55);
+      --panel-glass: blur(14px);
+      --panel-glow: none;
+      --grid-color: rgba(94, 130, 179, 0.18);
+      --grid-step: 120px;
+      --scanline-color: rgba(255, 255, 255, 0.06);
+      --scanline-step: 4px;
+      --severity-crit: #FF3B30;
+      --severity-warn: #FF9500;
+      --severity-info: #1F7AE0;
+      --severity-ok: #16B365;
+      --modality-rf: #007AFF;
+      --modality-thermal: #FF3B30;
+      --modality-eo: #34C759;
+      --modality-ir: #FF9500;
+      --modality-acoustic: #8E8E93;
     }
-    .legend span { display:inline-block; width:10px; height:10px; margin-right:6px; border-radius:50%; }
+
+    * { box-sizing: border-box; }
+
+    html, body, #map { height: 100%; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Inter", "Segoe UI", "Roboto", system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.45;
+      transition: background 220ms ease, color 220ms ease;
+    }
+
+    a { color: var(--accent); }
+
+    body.alert-warn {
+      --text: color-mix(in srgb, var(--text) 88%, white 12%);
+      --subtext: color-mix(in srgb, var(--subtext) 84%, white 16%);
+    }
+
+    body.alert-crit {
+      --text: color-mix(in srgb, var(--text) 78%, white 22%);
+      --subtext: color-mix(in srgb, var(--subtext) 70%, white 30%);
+    }
+
+    #map { width: 100%; height: 100%; }
+
+    .leaflet-container { background: var(--bg); color: var(--text); }
+
+    .leaflet-pane.zmeta-decor-pane {
+      pointer-events: none;
+      z-index: 350;
+    }
+
+    .leaflet-pane.zmeta-decor-pane .decor-layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 180ms ease;
+      mix-blend-mode: screen;
+    }
+
+    .hud-panel {
+      background: color-mix(in srgb, var(--panel) 86%, rgba(10, 12, 18, 0.65));
+      color: var(--text);
+      border: var(--panel-border-width) solid color-mix(in srgb, var(--border) 94%, transparent);
+      border-radius: var(--panel-radius);
+      padding: 14px 16px;
+      box-shadow: var(--panel-shadow);
+      backdrop-filter: var(--panel-glass);
+      min-width: 220px;
+    }
+
+    .hud-panel.compact { padding: 12px 14px; min-width: 190px; }
+
+    .panel-title {
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--subtext) 40%, var(--text) 60%);
+      margin-bottom: 8px;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px 12px;
+      font-size: 13px;
+    }
+
+    .metrics-grid span.label {
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: color-mix(in srgb, var(--subtext) 80%, var(--text) 20%);
+    }
+
+    .metrics-grid span.value {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 4px 12px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: color-mix(in srgb, var(--subtext) 78%, var(--text) 22%);
+    }
+
+    .legend span.dot {
+      display: inline-flex;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+
+    .appearance-panel { min-width: 240px; }
+
+    .appearance-panel label.field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 12px;
+      color: color-mix(in srgb, var(--subtext) 78%, var(--text) 22%);
+      margin-bottom: 12px;
+    }
+
+    .appearance-panel select,
+    .appearance-panel .toggle-row {
+      font-size: 13px;
+      background: color-mix(in srgb, var(--panel) 90%, rgba(18, 20, 28, 0.82));
+      color: var(--text);
+      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+      border-radius: calc(var(--panel-radius) - 6px);
+      padding: 8px 10px;
+    }
+
+    .appearance-panel select {
+      appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--subtext) 50%),
+                        linear-gradient(135deg, var(--subtext) 50%, transparent 50%);
+      background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 13px) calc(50% - 3px);
+      background-size: 6px 6px;
+      background-repeat: no-repeat;
+    }
+
+    .appearance-panel .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .appearance-panel input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+
+    .appearance-panel input[type="checkbox"].is-auto-disabled {
+      opacity: 0.6;
+    }
+
+    .appearance-status {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--subtext) 82%, var(--text) 18%);
+      margin-top: 6px;
+    }
+
+    .appearance-status strong { color: var(--accent); font-weight: 600; }
+
+    body.decor-glow .leaflet-overlay-pane path.zmeta-feature,
+    body.decor-glow .leaflet-overlay-pane path.zmeta-trail {
+      filter: drop-shadow(var(--panel-glow));
+    }
+
+    .leaflet-tooltip {
+      background: color-mix(in srgb, var(--panel) 92%, rgba(10, 14, 19, 0.88));
+      border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+      border-radius: calc(var(--panel-radius) - 6px);
+      color: var(--text);
+    }
+
+    .leaflet-tooltip::before { border-top-color: color-mix(in srgb, var(--panel) 92%, rgba(10, 14, 19, 0.88)); }
+
+    .leaflet-control-container .leaflet-top.leaflet-left { margin-top: 16px; margin-left: 16px; }
+    .leaflet-control-container .leaflet-top.leaflet-right { margin-top: 16px; margin-right: 16px; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 2px 10px;
+      background: color-mix(in srgb, var(--accent) 20%, transparent);
+      color: var(--accent);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .badge.warn {
+      color: var(--severity-warn);
+      background: color-mix(in srgb, var(--severity-warn) 20%, transparent);
+    }
+
+    .badge.crit {
+      color: var(--severity-crit);
+      background: color-mix(in srgb, var(--severity-crit) 20%, transparent);
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
 
-  <!-- Leaflet JS (deferred) with fallback -->
-  <script defer>
-    (function ensureLeaflet() {
-      function addScript(src, onload) {
-        const s = document.createElement('script');
-        s.src = src; s.defer = true; s.crossOrigin = '';
-        s.onload = onload;
-        document.head.appendChild(s);
+  <script type="module">
+    import {
+      loadThemes,
+      applySkin,
+      currentSkin,
+      persistSkin,
+      skinNames,
+      readDecorPreference,
+      persistDecorPreference,
+      decorDefaults,
+    } from './theme.js';
+
+    (function bootstrap() {
+      const PRIMARY_LEAFLET_JS = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+      const FALLBACK_LEAFLET_JS = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+      const FALLBACK_LEAFLET_CSS = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+
+      function injectScript(src, onload) {
+        const script = document.createElement('script');
+        script.src = src;
+        script.defer = true;
+        script.crossOrigin = '';
+        script.onload = onload;
+        document.head.appendChild(script);
       }
-      function addCSS(href) {
-        const l = document.createElement('link');
-        l.rel = 'stylesheet'; l.href = href; l.crossOrigin = '';
-        document.head.appendChild(l);
+
+      function injectCss(href) {
+        const link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = href;
+        link.crossOrigin = '';
+        document.head.appendChild(link);
       }
-      // primary CDN
-      addScript('https://unpkg.com/leaflet@1.9.4/dist/leaflet.js', () => {
-        window.__leafletReady = true;
-      });
-      // fallback if primary fails in 2s
-      setTimeout(() => {
-        if (!window.__leafletReady) {
-          console.warn('Leaflet primary CDN failed, using fallback…');
-          addScript('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js', () => {
-            window.__leafletReady = true;
-          });
-          // also ensure CSS exists
-          const el = document.getElementById('leaflet-css');
-          if (!el) addCSS('https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css');
+
+      function waitForLeaflet(start) {
+        if (!window.L) {
+          return setTimeout(() => waitForLeaflet(start), 60);
         }
-      }, 2000);
-    })();
-  </script>
+        start();
+      }
 
-  <!-- App code (runs after DOM + after Leaflet loaded) -->
-  <script>
-    (function startWhenReady(){
-      const start = () => {
-        if (!window.L) { return setTimeout(start, 100); } // wait for Leaflet
-        console.log('Leaflet loaded, starting map…');
+      injectScript(PRIMARY_LEAFLET_JS, () => {
+        if (!window.L) {
+          console.warn('Leaflet CDN primary failed, falling back');
+          injectCss(FALLBACK_LEAFLET_CSS);
+          injectScript(FALLBACK_LEAFLET_JS, () => waitForLeaflet(start));
+        } else {
+          waitForLeaflet(start);
+        }
+      });
 
-        // --- Map setup ---
-        const map = L.map('map').setView([35.271, -78.637], 12);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap'
-        }).addTo(map);
+      async function start() {
+        await loadThemes();
 
-        // --- Info control ---
+        const state = {
+          userSkin: currentSkin(),
+          forcedSkin: null,
+          safety: 'none',
+          userDecor: null,
+          decorDefaults: decorDefaults(currentSkin()),
+          decorEffective: { grid: false, scanlines: false, glow: false },
+          overlay: null,
+          alertBuckets: { warn: 0, crit: 0 },
+          alertDecayTimers: new Map(),
+          appearanceUI: null,
+          activeSkinTokens: null,
+        };
+
+        const map = L.map('map', { zoomControl: true, attributionControl: false });
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+        map.setView([35.271, -78.637], 7);
+
+        const decorPane = map.createPane('zmeta-decor');
+        decorPane.classList.add('zmeta-decor-pane');
+        const decorLayer = document.createElement('div');
+        decorLayer.className = 'decor-layer';
+        decorPane.appendChild(decorLayer);
+        state.overlay = { layer: decorLayer };
+
+        function normalizeDecor(pref) {
+          const defaults = state.decorDefaults;
+          if (!pref) {
+            return {
+              grid: defaults.grid,
+              scanlines: defaults.scanlines,
+              glow: defaults.glow,
+            };
+          }
+          return {
+            grid: pref.grid === undefined ? defaults.grid : !!pref.grid,
+            scanlines: pref.scanlines === undefined ? defaults.scanlines : !!pref.scanlines,
+            glow: pref.glow === undefined ? defaults.glow : !!pref.glow,
+          };
+        }
+
+        function readUserDecor() {
+          const stored = readDecorPreference();
+          state.userDecor = normalizeDecor(stored);
+        }
+
+        readUserDecor();
+
+        let skinOp = Promise.resolve();
+        const queueSkin = (task) => {
+          skinOp = skinOp.then(() => task()).catch((err) => console.error(err));
+          return skinOp;
+        };
+
+        function hexToRgba(hex, alpha) {
+          const value = hex.replace('#', '');
+          const r = parseInt(value.slice(0, 2), 16) || 0;
+          const g = parseInt(value.slice(2, 4), 16) || 0;
+          const b = parseInt(value.slice(4, 6), 16) || 0;
+          return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        function applyDecorCss(tokens) {
+          const root = document.documentElement;
+          const border = tokens.border || '#1E2530';
+          const accent = tokens.accent || border;
+          root.style.setProperty('--grid-color', hexToRgba(border, 0.22));
+          root.style.setProperty('--scanline-color', hexToRgba(accent, 0.14));
+          root.style.setProperty('--grid-step', `${state.decorDefaults.grid_spacing || 120}px`);
+          root.style.setProperty('--scanline-step', `${state.decorDefaults.scan_step || 4}px`);
+        }
+
+        function updateOverlay() {
+          if (!state.overlay) {
+            return;
+          }
+          const layer = state.overlay.layer;
+          const effective = state.decorEffective;
+          const backgrounds = [];
+          const sizes = [];
+          const positions = [];
+          const spacing = state.decorDefaults.grid_spacing || 120;
+          const scan_step = state.decorDefaults.scan_step || 4;
+
+          if (effective.grid) {
+            backgrounds.push('linear-gradient(var(--grid-color) 1px, transparent 1px)');
+            backgrounds.push('linear-gradient(90deg, var(--grid-color) 1px, transparent 1px)');
+            sizes.push(`${spacing}px ${spacing}px`, `${spacing}px ${spacing}px`);
+            positions.push('0 0', '0 0');
+          }
+
+          if (effective.scanlines) {
+            backgrounds.push('linear-gradient(var(--scanline-color) 1px, transparent 1px)');
+            sizes.push(`100% ${scan_step}px`);
+            positions.push('0 0');
+          }
+
+          layer.style.backgroundImage = backgrounds.join(',');
+          layer.style.backgroundSize = sizes.join(',');
+          layer.style.backgroundPosition = positions.join(',');
+          layer.style.opacity = backgrounds.length ? (effective.scanlines ? 0.24 : 0.18) : 0;
+        }
+
+        function computeEffectiveDecor() {
+          const defaults = state.decorDefaults;
+          const base = {
+            grid: state.userDecor.grid ?? defaults.grid,
+            scanlines: state.userDecor.scanlines ?? defaults.scanlines,
+            glow: state.userDecor.glow ?? defaults.glow,
+          };
+          if (state.safety === 'warn') {
+            base.scanlines = false;
+            base.glow = false;
+          }
+          if (state.safety === 'crit') {
+            base.grid = false;
+            base.scanlines = false;
+            base.glow = false;
+          }
+          return base;
+        }
+
+        function updateDecor() {
+          state.decorEffective = computeEffectiveDecor();
+          document.body.classList.toggle('decor-glow', state.decorEffective.glow);
+          updateOverlay();
+          updateAppearanceUI();
+        }
+
+        function persistDecor() {
+          persistDecorPreference({
+            grid: !!state.userDecor.grid,
+            scanlines: !!state.userDecor.scanlines,
+            glow: !!state.userDecor.glow,
+          });
+        }
+
+        function setUserDecor(partial) {
+          state.userDecor = { ...state.userDecor, ...partial };
+          persistDecor();
+          updateDecor();
+        }
+
+        function setSafetyClass(level) {
+          document.body.classList.toggle('alert-warn', level === 'warn');
+          document.body.classList.toggle('alert-crit', level === 'crit');
+        }
+
+        function updateAppearanceStatus(statusLabel) {
+          if (!statusLabel) {
+            return;
+          }
+          if (state.safety === 'crit') {
+            statusLabel.innerHTML = '<strong>Safety</strong>: CRIT � visuals locked to Nostromo';
+          } else if (state.safety === 'warn') {
+            statusLabel.textContent = 'Safety: WARN � scanlines & glow paused';
+          } else {
+            statusLabel.textContent = 'Safety: normal';
+          }
+        }
+
+        async function applySkinAndDecor(name, { silent = false, fromSafety = false } = {}) {
+          return queueSkin(async () => {
+            const tokens = await applySkin(name, { silent });
+            state.activeSkinTokens = tokens;
+            if (!fromSafety) {
+              state.userSkin = name;
+              persistSkin(name);
+            }
+            state.decorDefaults = decorDefaults(name);
+            applyDecorCss(tokens);
+            readUserDecor();
+            updateDecor();
+            return tokens;
+          });
+        }
+
+        function normalizeSafety() {
+          const previous = state.safety;
+          const highest = state.alertBuckets.crit > 0 ? 'crit' : state.alertBuckets.warn > 0 ? 'warn' : 'none';
+          if (highest === previous) {
+            return Promise.resolve();
+          }
+          state.safety = highest;
+          setSafetyClass(highest);
+          if (highest === 'crit') {
+            if (state.forcedSkin == null) {
+              state.forcedSkin = state.userSkin;
+            }
+            return applySkinAndDecor('nostromo', { silent: true, fromSafety: true });
+          }
+          if (highest === 'warn') {
+            const target = state.forcedSkin ?? state.userSkin;
+            return applySkinAndDecor(target, { silent: state.forcedSkin !== null, fromSafety: true });
+          }
+          const restore = state.forcedSkin ?? state.userSkin;
+          state.forcedSkin = null;
+          return applySkinAndDecor(restore, { silent: true, fromSafety: true });
+        }
+
+        function registerAlert(level) {
+          if (level !== 'warn' && level !== 'crit') {
+            return;
+          }
+          const now = Date.now();
+          state.alertBuckets[level] += 1;
+          const timerKey = `${level}-${now}`;
+          const handle = setTimeout(() => {
+            state.alertBuckets[level] = Math.max(0, state.alertBuckets[level] - 1);
+            normalizeSafety().then(() => updateDecor());
+            state.alertDecayTimers.delete(timerKey);
+          }, 20000);
+          state.alertDecayTimers.set(timerKey, handle);
+          normalizeSafety().then(() => updateDecor());
+        }
+
+        function releaseAlertTimers() {
+          state.alertDecayTimers.forEach((handle) => clearTimeout(handle));
+          state.alertDecayTimers.clear();
+        }
+
+        await applySkinAndDecor(state.userSkin, { silent: true });
+
         const Info = L.Control.extend({
+          options: { position: 'topleft' },
           onAdd() {
-            const div = L.DomUtil.create('div', 'info');
+            const div = L.DomUtil.create('div', 'hud-panel compact');
             div.innerHTML = `
-              <div><b>ZMeta Live</b></div>
-              <div>WS: <span id="wsStatus">connecting…</span></div>
-              <div>Clients: <span id="cClients">0</span></div>
-              <div>EPS(10s): <span id="cEps10">0</span></div>
-              <div>Last pkt age: <span id="cAge">–</span>s</div>
-              <div>Alerts: <span id="cAlerts">0</span></div>
-              <div class="legend" style="margin-top:6px">
-                <div><span style="background:#007aff"></span>rf</div>
-                <div><span style="background:#ff3b30"></span>thermal</div>
-                <div><span style="background:#34c759"></span>eo</div>
-                <div><span style="background:#ff9500"></span>ir</div>
-                <div><span style="background:#8e8e93"></span>acoustic</div>
+              <div class="panel-title">Status</div>
+              <div class="metrics-grid">
+                <span class="label">WS</span><span class="value" id="wsStatus">connecting�</span>
+                <span class="label">Clients</span><span class="value" id="cClients">0</span>
+                <span class="label">EPS (10s)</span><span class="value" id="cEps10">0</span>
+                <span class="label">Last pkt</span><span class="value" id="cAge">-</span>
+                <span class="label">Alerts</span><span class="value" id="cAlerts">0</span>
+              </div>
+              <div class="legend">
+                <div><span class="dot" style="background: var(--modality-rf);"></span>RF</div>
+                <div><span class="dot" style="background: var(--modality-thermal);"></span>Thermal</div>
+                <div><span class="dot" style="background: var(--modality-eo);"></span>EO</div>
+                <div><span class="dot" style="background: var(--modality-ir);"></span>IR</div>
+                <div><span class="dot" style="background: var(--modality-acoustic);"></span>Acoustic</div>
               </div>`;
             return div;
-          }
+          },
         });
-        new Info({ position: 'topleft' }).addTo(map);
+        new Info().addTo(map);
 
-        // UI refs
+        function createAppearanceControl() {
+          const control = L.control({ position: 'topright' });
+          control.onAdd = () => {
+            const container = L.DomUtil.create('div', 'hud-panel appearance-panel');
+            container.innerHTML = `
+              <div class="panel-title">Appearance</div>
+              <label class="field">Skin
+                <select id="skinSelect">
+                  ${skinNames().map((name) => `<option value="${name}">${name}</option>`).join('')}
+                </select>
+              </label>
+              <div class="toggle-row">
+                <span>Grid</span>
+                <input type="checkbox" id="decorGrid" />
+              </div>
+              <div class="toggle-row">
+                <span>Scanlines</span>
+                <input type="checkbox" id="decorScanlines" />
+              </div>
+              <div class="toggle-row">
+                <span>Glow</span>
+                <input type="checkbox" id="decorGlow" />
+              </div>
+              <div class="appearance-status" data-role="appearance-status"></div>
+            `;
+            L.DomEvent.disableClickPropagation(container);
+            L.DomEvent.disableScrollPropagation(container);
+
+            const skinSelect = container.querySelector('#skinSelect');
+            const gridToggle = container.querySelector('#decorGrid');
+            const scanToggle = container.querySelector('#decorScanlines');
+            const glowToggle = container.querySelector('#decorGlow');
+            const statusLabel = container.querySelector('[data-role="appearance-status"]');
+
+            state.appearanceUI = { skinSelect, gridToggle, scanToggle, glowToggle, statusLabel };
+            updateAppearanceUI();
+
+            skinSelect.addEventListener('change', (ev) => {
+              const next = ev.target.value;
+              if (!next || state.safety === 'crit') {
+                if (state.safety === 'crit') {
+                  state.userSkin = next;
+                  persistSkin(next);
+                  updateAppearanceUI();
+                }
+                return;
+              }
+              applySkinAndDecor(next);
+            });
+
+            gridToggle.addEventListener('change', (ev) => {
+              setUserDecor({ grid: ev.target.checked });
+            });
+            scanToggle.addEventListener('change', (ev) => {
+              setUserDecor({ scanlines: ev.target.checked });
+            });
+            glowToggle.addEventListener('change', (ev) => {
+              setUserDecor({ glow: ev.target.checked });
+            });
+
+            return container;
+          };
+          control.addTo(map);
+        }
+
+        function updateAppearanceUI() {
+          const ui = state.appearanceUI;
+          if (!ui) {
+            return;
+          }
+          ui.skinSelect.value = state.userSkin;
+          ui.gridToggle.checked = !!state.userDecor.grid;
+          ui.scanToggle.checked = !!state.userDecor.scanlines;
+          ui.glowToggle.checked = !!state.userDecor.glow;
+
+          const forcedCrit = state.safety === 'crit';
+          const forcedWarn = state.safety === 'warn';
+
+          ui.skinSelect.disabled = forcedCrit;
+          ui.gridToggle.disabled = forcedCrit;
+          ui.scanToggle.disabled = forcedCrit || forcedWarn;
+          ui.glowToggle.disabled = forcedCrit || forcedWarn;
+
+          ui.gridToggle.classList.toggle('is-auto-disabled', forcedCrit && ui.gridToggle.checked && !state.decorEffective.grid);
+          ui.scanToggle.classList.toggle('is-auto-disabled', (forcedWarn || forcedCrit) && ui.scanToggle.checked && !state.decorEffective.scanlines);
+          ui.glowToggle.classList.toggle('is-auto-disabled', (forcedWarn || forcedCrit) && ui.glowToggle.checked && !state.decorEffective.glow);
+
+          updateAppearanceStatus(ui.statusLabel);
+        }
+
+        createAppearanceControl();
+
         const wsStatus = document.getElementById('wsStatus');
         const elClients = document.getElementById('cClients');
-        const elEps10   = document.getElementById('cEps10');
-        const elAge     = document.getElementById('cAge');
-        const elAlerts  = document.getElementById('cAlerts');
+        const elEps10 = document.getElementById('cEps10');
+        const elAge = document.getElementById('cAge');
+        const elAlerts = document.getElementById('cAlerts');
         let alertCount = 0;
 
-        // --- Markers/trails ---
-        const modalityColors = { rf:'#007aff', thermal:'#ff3b30', eo:'#34c759', ir:'#ff9500', acoustic:'#8e8e93', default:'#5856d6' };
+        const modalityColors = {
+          rf: 'var(--modality-rf)',
+          thermal: 'var(--modality-thermal)',
+          eo: 'var(--modality-eo)',
+          ir: 'var(--modality-ir)',
+          acoustic: 'var(--modality-acoustic)',
+          default: '#5856d6',
+        };
+
         const markers = new Map();
-        const trails  = new Map();
+        const trails = new Map();
         const MAX_TRAIL_POINTS = 50;
 
-        function getId(z){ return z.tracking_id || z.pid || (z.sensor_id + ':' + (z.data?.type || 'unknown')); }
-        function colorFor(z){ return modalityColors[z.modality] || modalityColors.default; }
+        function featureId(z) {
+          return z.tracking_id || z.pid || `${z.sensor_id}:${z.data?.type || 'unknown'}`;
+        }
 
-        function upsertFeature(z){
+        function modalityColor(z) {
+          return modalityColors[z.modality] || modalityColors.default;
+        }
+
+        function upsertFeature(z) {
           const loc = z.location || {};
-          if (typeof loc.lat !== 'number' || typeof loc.lon !== 'number') return;
-          const id = getId(z);
+          if (typeof loc.lat !== 'number' || typeof loc.lon !== 'number') {
+            return;
+          }
+          const id = featureId(z);
           const latlng = [loc.lat, loc.lon];
-          const color = colorFor(z);
+          const color = modalityColor(z);
 
-          let m = markers.get(id);
-          if (!m){
-            m = L.circleMarker(latlng, { radius:6, color, weight:2, fillOpacity:0.6 }).addTo(map);
-            markers.set(id, m);
+          let marker = markers.get(id);
+          if (!marker) {
+            marker = L.circleMarker(latlng, {
+              radius: 6,
+              color,
+              weight: 2,
+              fillOpacity: 0.6,
+              className: 'zmeta-feature',
+            }).addTo(map);
+            markers.set(id, marker);
           } else {
-            m.setLatLng(latlng); m.setStyle({ color });
+            marker.setLatLng(latlng);
+            marker.setStyle({ color });
           }
 
-          const t = trails.get(id) || [];
-          t.push(latlng); if (t.length > MAX_TRAIL_POINTS) t.shift();
-          trails.set(id, t);
+          const history = trails.get(id) || [];
+          history.push(latlng);
+          if (history.length > MAX_TRAIL_POINTS) {
+            history.shift();
+          }
+          trails.set(id, history);
 
-          let poly = m._trail;
-          if (!poly){ poly = L.polyline(t, { color, weight:2, opacity:0.6 }).addTo(map); m._trail = poly; }
-          else { poly.setLatLngs(t); poly.setStyle({ color }); }
+          let poly = marker._trail;
+          if (!poly) {
+            poly = L.polyline(history, {
+              color,
+              weight: 2,
+              opacity: 0.6,
+              className: 'zmeta-trail',
+            }).addTo(map);
+            marker._trail = poly;
+          } else {
+            poly.setLatLngs(history);
+            poly.setStyle({ color });
+          }
 
           const freq = z.data?.value?.frequency_hz;
           const rssi = z.data?.value?.rssi_dbm;
-          const details = [
-            `id: <b>${id}</b>`,
-            `modality: <b>${z.modality}</b>`,
-            z.timestamp ? `ts: <b>${z.timestamp}</b>` : '',
-            (typeof freq === 'number') ? `freq: <b>${freq}</b>` : '',
-            (typeof rssi === 'number') ? `rssi: <b>${rssi}</b>` : '',
-            (z.confidence != null) ? `conf: <b>${z.confidence}</b>` : ''
+          const tip = [
+            `ID: <b>${id}</b>`,
+            `Modality: <b>${z.modality}</b>`,
+            z.timestamp ? `TS: <b>${z.timestamp}</b>` : '',
+            typeof freq === 'number' ? `Freq: <b>${freq}</b>` : '',
+            typeof rssi === 'number' ? `RSSI: <b>${rssi}</b>` : '',
+            z.confidence != null ? `Conf: <b>${z.confidence}</b>` : '',
           ].filter(Boolean).join('<br>');
-          m.bindTooltip(details, { direction:'top', opacity:0.9 });
+          marker.bindTooltip(tip, { direction: 'top', opacity: 0.9 });
         }
 
-        function showAlert(a){
-          const color = a.severity === 'crit' ? '#ff3b30' : (a.severity === 'warn' ? '#ff9500' : '#007aff');
-          const lat = a.loc?.lat, lon = a.loc?.lon;
-          if (typeof lat === 'number' && typeof lon === 'number'){
-            const ring = L.circle([lat, lon], { radius:120, color, weight:3, opacity:0.9, fillOpacity:0.1 }).addTo(map);
+        function showAlert(a) {
+          const severity = String(a.severity || 'info').toLowerCase();
+          const color = severity === 'crit' ? 'var(--severity-crit)' : severity === 'warn' ? 'var(--severity-warn)' : 'var(--severity-info)';
+          const lat = a.loc?.lat;
+          const lon = a.loc?.lon;
+          if (typeof lat === 'number' && typeof lon === 'number') {
+            const ring = L.circle([lat, lon], {
+              radius: 120,
+              color,
+              weight: 3,
+              opacity: 0.9,
+              fillOpacity: 0.1,
+              className: 'zmeta-feature',
+            }).addTo(map);
             setTimeout(() => map.removeLayer(ring), 4000);
           }
-          alertCount += 1; elAlerts.textContent = String(alertCount);
+          if (severity === 'warn' || severity === 'crit') {
+            registerAlert(severity);
+          }
+          alertCount += 1;
+          elAlerts.textContent = String(alertCount);
         }
 
-        // --- WebSocket ---
-        const ws = new WebSocket(
-  (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws'
-);
-
-        ws.onopen = () => { wsStatus.textContent = "connected"; console.log("WS connected"); };
-        ws.onclose = () => { wsStatus.textContent = "closed"; };
-        ws.onerror = (e) => { wsStatus.textContent = "error"; console.warn("WS error", e); };
+        const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+        ws.onopen = () => { wsStatus.textContent = 'connected'; };
+        ws.onclose = () => { wsStatus.textContent = 'closed'; };
+        ws.onerror = () => { wsStatus.textContent = 'error'; };
         ws.onmessage = (evt) => {
           try {
             const msg = JSON.parse(evt.data);
-            if (msg && msg.type === 'alert') showAlert(msg);
-            else if (msg && msg.location)   upsertFeature(msg);
-          } catch {}
+            if (msg && msg.type === 'alert') {
+              showAlert(msg);
+            } else if (msg && msg.location) {
+              upsertFeature(msg);
+            }
+          } catch (err) {
+            console.warn('WS parse error', err);
+          }
         };
 
-        // --- Health poller (2s) ---
-        async function pollHealth(){
+        async function pollHealth() {
           try {
-            const r = await fetch('/healthz');
-            const j = await r.json();
-            elClients.textContent = j.clients ?? '0';
-            elEps10.textContent   = j.eps_10s ?? '0';
-            elAge.textContent     = (j.last_packet_age_s ?? '–');
-            elAlerts.textContent  = j.alerts_total ?? '0';
-          } catch (e) {
-            // CORS/network issues are fine; map still works
+            const response = await fetch('/healthz');
+            const payload = await response.json();
+            elClients.textContent = payload.clients ?? '0';
+            elEps10.textContent = payload.eps_10s ?? payload.eps_1s ?? '0';
+            elAge.textContent = payload.last_packet_age_s ?? '-';
+            elAlerts.textContent = payload.alerts_total ?? elAlerts.textContent;
+            const sev = String(payload.alerts_highest_severity || '').toLowerCase();
+            if (sev === 'warn' || sev === 'crit') {
+              registerAlert(sev);
+            }
+          } catch (err) {
+            console.debug('Health poll failed', err);
           }
         }
-        pollHealth(); setInterval(pollHealth, 2000);
-      };
-      if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', start);
-      } else {
-        start();
+
+        pollHealth();
+        setInterval(pollHealth, 4000);
+
+        // Ensure overlay sizes update on map resize
+        map.on('resize', () => updateOverlay());
+
+        window.addEventListener('beforeunload', () => {
+          releaseAlertTimers();
+        });
       }
     })();
   </script>

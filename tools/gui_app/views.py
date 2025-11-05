@@ -9,6 +9,7 @@ import webbrowser
 import queue
 from collections import deque
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Callable
 
 import requests
@@ -97,6 +98,17 @@ class ZMetaApp(ttk.Frame):
         self.log_text: ScrolledText | None = None
         self.notebook: ttk.Notebook | None = None
 
+        self.preferences_path = Path.home() / ".inceptio_prefs.json"
+        prefs = self._load_preferences()
+        self._preferences = prefs
+        if isinstance(prefs.get("base_url"), str):
+            self.base_url_var.set(prefs["base_url"])
+        if isinstance(prefs.get("secret"), str):
+            self.secret_var.set(prefs["secret"])
+        self._alert_buckets = {"warn": 0, "crit": 0}
+        self._alert_decay_handles: list[int] = []
+        self._safety_level = "none"
+
         self._init_styles()
         self._build_ui()
         self.after(150, self._poll_queue)
@@ -105,6 +117,7 @@ class ZMetaApp(ttk.Frame):
 
     def _init_styles(self) -> None:
         style = ttk.Style()
+        self.style = style
         try:
             style.theme_use("clam")
         except Exception:
@@ -114,22 +127,71 @@ class ZMetaApp(ttk.Frame):
         small_font = ("Segoe UI", 12)
         title_font = ("Segoe UI", 16, "bold")
 
-        style.configure("TLabel", font=base_font, foreground="#0f1419")
-        style.configure("Card.TFrame", background="#ffffff", borderwidth=1, relief="solid")
-        style.configure("CardTitle.TLabel", font=title_font, foreground="#0f1419")
-        style.configure("Muted.TLabel", foreground="#637081", font=small_font)
-        style.configure("Value.TLabel", font=("Segoe UI", 18, "bold"))
+        default_bg = style.lookup("TFrame", "background") or self.master.cget("bg")
 
-        style.configure("Treeview", rowheight=26, font=small_font, background="#ffffff", fieldbackground="#ffffff", bordercolor="#e6e9ef")
-        style.configure("Treeview.Heading", font=("Segoe UI", 12, "bold"), foreground="#0f1419")
-        style.map("Treeview", background=[('selected', '#d6e4ff')])
+        style.configure("Root.TFrame", background=default_bg)
+        style.configure("Surface.TFrame", background=default_bg)
+        style.configure("Card.TFrame", background=default_bg, borderwidth=1, relief="solid")
+
+        style.configure("TLabel", background=default_bg, font=base_font)
+        style.configure("CardTitle.TLabel", background=default_bg, font=title_font)
+        style.configure("Muted.TLabel", background=default_bg, font=small_font)
+        style.configure("Value.TLabel", background=default_bg, font=("Segoe UI", 18, "bold"))
+
+        style.configure("Treeview", rowheight=26, font=small_font)
+        style.configure("Treeview.Heading", font=("Segoe UI", 12, "bold"))
 
         style.configure('Notebook.Tab', padding=(16, 8), font=small_font)
-        style.map('Notebook.Tab', foreground=[('active', '#0f1419'), ('selected', '#0f1419')])
-
         style.configure('TButton', padding=(10, 6), font=small_font)
 
+    def _load_preferences(self) -> dict[str, Any]:
+        try:
+            raw = self.preferences_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            return {}
+        except OSError:
+            return {}
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _save_preferences(self) -> None:
+        data = {
+            "base_url": self.base_url_var.get(),
+            "secret": self.secret_var.get(),
+        }
+        try:
+            self.preferences_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except OSError as exc:
+            self._append_log(f"[prefs] failed to save preferences: {exc}")
+
+    def _note_alert_severity(self, severity: str) -> None:
+        level = severity.lower()
+        if level not in ("warn", "crit"):
+            return
+        self._alert_buckets[level] += 1
+        handle = self.after(20000, lambda lvl=level: self._decay_alert_bucket(lvl))
+        self._alert_decay_handles.append(handle)
+        self._evaluate_safety()
+
+    def _decay_alert_bucket(self, level: str) -> None:
+        self._alert_buckets[level] = max(0, self._alert_buckets[level] - 1)
+        self._evaluate_safety()
+
+    def _evaluate_safety(self) -> None:
+        highest = "crit" if self._alert_buckets["crit"] > 0 else ("warn" if self._alert_buckets["warn"] > 0 else "none")
+        self._safety_level = highest
+
+    def _sync_safety_from_metrics(self, severity: str) -> None:
+        level = severity.lower()
+        if level not in ("warn", "crit"):
+            self._safety_level = "none"
+            return
+        self._safety_level = level
     def _build_ui(self) -> None:
+        self.configure(style="Root.TFrame")
         self.grid(row=0, column=0, sticky="nsew")
         self.master.columnconfigure(0, weight=1)
         self.master.rowconfigure(0, weight=1)
@@ -137,7 +199,7 @@ class ZMetaApp(ttk.Frame):
         self.rowconfigure(0, weight=0)
         self.rowconfigure(1, weight=1)
 
-        top = ttk.Frame(self, padding=(0, 0, 0, 10))
+        top = ttk.Frame(self, padding=(0, 0, 0, 10), style="Surface.TFrame")
         top.grid(row=0, column=0, sticky="ew")
         for col in range(12):
             top.columnconfigure(col, weight=1 if col in (1, 3) else 0)
@@ -164,12 +226,12 @@ class ZMetaApp(ttk.Frame):
         notebook.grid(row=1, column=0, sticky="nsew")
         self.notebook = notebook
 
-        live_tab = ttk.Frame(notebook)
+        live_tab = ttk.Frame(notebook, style="Surface.TFrame")
         live_tab.columnconfigure(0, weight=1)
         live_tab.rowconfigure(0, weight=1)
         notebook.add(live_tab, text="Live")
 
-        debug_tab = ttk.Frame(notebook, padding=12)
+        debug_tab = ttk.Frame(notebook, padding=12, style="Surface.TFrame")
         debug_tab.columnconfigure(0, weight=1)
         debug_tab.rowconfigure(1, weight=1)
         notebook.add(debug_tab, text="Debug")
@@ -177,18 +239,17 @@ class ZMetaApp(ttk.Frame):
         self._build_live_tab(live_tab)
         self._build_debug_tab(debug_tab)
 
-
     def _build_live_tab(self, parent: ttk.Frame) -> None:
         parent.columnconfigure(0, weight=1)
         parent.rowconfigure(0, weight=1)
 
-        content = ttk.Frame(parent)
+        content = ttk.Frame(parent, style="Surface.TFrame")
         content.grid(row=0, column=0, sticky="nsew")
         content.columnconfigure(0, weight=3)
         content.columnconfigure(1, weight=2)
         content.rowconfigure(0, weight=1)
 
-        map_frame = ttk.Frame(content, borderwidth=1, relief="solid")
+        map_frame = ttk.Frame(content, borderwidth=1, relief="solid", style="Card.TFrame")
         map_frame.grid(row=0, column=0, sticky="nsew")
         map_frame.columnconfigure(0, weight=1)
         map_frame.rowconfigure(0, weight=1)
@@ -199,7 +260,7 @@ class ZMetaApp(ttk.Frame):
         self.map_widget.set_position(35.271, -78.637)
         self.map_widget.set_zoom(7)
 
-        sidebar = ttk.Frame(content, padding=(12, 0))
+        sidebar = ttk.Frame(content, padding=(12, 0), style="Surface.TFrame")
         sidebar.grid(row=0, column=1, sticky="nsew")
         sidebar.columnconfigure(0, weight=1)
         sidebar.rowconfigure(0, weight=3)
@@ -214,7 +275,7 @@ class ZMetaApp(ttk.Frame):
         parent.columnconfigure(0, weight=1)
         parent.rowconfigure(1, weight=1)
 
-        header = ttk.Frame(parent)
+        header = ttk.Frame(parent, style="Surface.TFrame")
         header.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         header.columnconfigure(0, weight=1)
         ttk.Label(header, text="Debug Log", style="CardTitle.TLabel").grid(row=0, column=0, sticky="w")
@@ -240,7 +301,7 @@ class ZMetaApp(ttk.Frame):
         card = self._create_card(parent, "Alerts", row)
         card.rowconfigure(2, weight=1)
 
-        filters = ttk.Frame(card)
+        filters = ttk.Frame(card, style="Surface.TFrame")
         filters.grid(row=1, column=0, sticky="ew", pady=(0, 8))
         for idx, level in enumerate(("crit", "warn", "info")):
             ttk.Checkbutton(
@@ -443,6 +504,7 @@ class ZMetaApp(ttk.Frame):
             "received_at": datetime.now(timezone.utc),
         }
         self.alert_store.push(entry)
+        self._note_alert_severity(entry["severity"])
         total = self.alert_store.total_received
         self.alert_total_var.set(f"Alerts: {total}")
         self.health_alerts_var.set(str(total))
@@ -604,6 +666,9 @@ class ZMetaApp(ttk.Frame):
             self.health_alerts_var.set(str(int(alerts_total)))
         else:
             self.health_alerts_var.set(str(self.alert_store.total_received))
+        highest = payload.get("alerts_highest_severity")
+        if isinstance(highest, str):
+            self._sync_safety_from_metrics(highest)
         self.health_updated_var.set(datetime.now().strftime("updated %H:%M:%S"))
 
     def _handle_health_error(self, error: str) -> None:
@@ -885,6 +950,11 @@ class ZMetaApp(ttk.Frame):
 
     def on_close(self) -> None:
         self.disconnect_ws()
+        self._save_preferences()
+        for handle in list(self._alert_decay_handles):
+            with contextlib.suppress(Exception):
+                self.after_cancel(handle)
+        self._alert_decay_handles.clear()
         if self._health_poll_job is not None:
             self.after_cancel(self._health_poll_job)
             self._health_poll_job = None
