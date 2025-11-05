@@ -145,13 +145,6 @@ Environment variables let you tune ports, URLs, and simulator targets:
 
 A starter `.env.example` is included - copy it to `.env` and tweak as needed.
 
-## Appearance
-
-  - Web HUD: use the Appearance panel (top-right) to select `nostromo`, `shinjuku`, or `section9` and toggle grid, scanlines, and glow. Choices persist via localStorage.
-  - Desktop GUI: currently uses the default ttk styling; appearance controls are paused for now. Connection preferences (base URL, secret) still persist in `~/.inceptio_prefs.json`.
-
-
-
 ### Secure mode
 
 Set `ZMETA_SHARED_SECRET` (and optionally `ZMETA_AUTH_HEADER`) to require clients to present a shared secret.

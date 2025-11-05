@@ -144,63 +144,7 @@
       margin-right: 6px;
     }
 
-    .appearance-panel { min-width: 240px; }
 
-    .appearance-panel label.field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      font-size: 12px;
-      color: color-mix(in srgb, var(--subtext) 78%, var(--text) 22%);
-      margin-bottom: 12px;
-    }
-
-    .appearance-panel select,
-    .appearance-panel .toggle-row {
-      font-size: 13px;
-      background: color-mix(in srgb, var(--panel) 90%, rgba(18, 20, 28, 0.82));
-      color: var(--text);
-      border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
-      border-radius: calc(var(--panel-radius) - 6px);
-      padding: 8px 10px;
-    }
-
-    .appearance-panel select {
-      appearance: none;
-      background-image: linear-gradient(45deg, transparent 50%, var(--subtext) 50%),
-                        linear-gradient(135deg, var(--subtext) 50%, transparent 50%);
-      background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 13px) calc(50% - 3px);
-      background-size: 6px 6px;
-      background-repeat: no-repeat;
-    }
-
-    .appearance-panel .toggle-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 8px;
-    }
-
-    .appearance-panel input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      accent-color: var(--accent);
-    }
-
-    .appearance-panel input[type="checkbox"].is-auto-disabled {
-      opacity: 0.6;
-    }
-
-    .appearance-status {
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: color-mix(in srgb, var(--subtext) 82%, var(--text) 18%);
-      margin-top: 6px;
-    }
-
-    .appearance-status strong { color: var(--accent); font-weight: 600; }
 
     body.decor-glow .leaflet-overlay-pane path.zmeta-feature,
     body.decor-glow .leaflet-overlay-pane path.zmeta-trail {
@@ -252,7 +196,6 @@
       applySkin,
       currentSkin,
       persistSkin,
-      skinNames,
       readDecorPreference,
       persistDecorPreference,
       decorDefaults,
@@ -310,7 +253,6 @@
           overlay: null,
           alertBuckets: { warn: 0, crit: 0 },
           alertDecayTimers: new Map(),
-          appearanceUI: null,
           activeSkinTokens: null,
         };
 
@@ -426,7 +368,6 @@
           state.decorEffective = computeEffectiveDecor();
           document.body.classList.toggle('decor-glow', state.decorEffective.glow);
           updateOverlay();
-          updateAppearanceUI();
         }
 
         function persistDecor() {
@@ -447,20 +388,6 @@
           document.body.classList.toggle('alert-warn', level === 'warn');
           document.body.classList.toggle('alert-crit', level === 'crit');
         }
-
-        function updateAppearanceStatus(statusLabel) {
-          if (!statusLabel) {
-            return;
-          }
-          if (state.safety === 'crit') {
-            statusLabel.innerHTML = '<strong>Safety</strong>: CRIT – visuals locked to Nostromo';
-          } else if (state.safety === 'warn') {
-            statusLabel.textContent = 'Safety: WARN – scanlines & glow paused';
-          } else {
-            statusLabel.textContent = 'Safety: normal';
-          }
-        }
-
         async function applySkinAndDecor(name, { silent = false, fromSafety = false } = {}) {
           return queueSkin(async () => {
             const tokens = await applySkin(name, { silent });
@@ -530,7 +457,7 @@
             div.innerHTML = `
               <div class="panel-title">Status</div>
               <div class="metrics-grid">
-                <span class="label">WS</span><span class="value" id="wsStatus">connecting…</span>
+                <span class="label">WS</span><span class="value" id="wsStatus">connectingâ€¦</span>
                 <span class="label">Clients</span><span class="value" id="cClients">0</span>
                 <span class="label">EPS (10s)</span><span class="value" id="cEps10">0</span>
                 <span class="label">Last pkt</span><span class="value" id="cAge">-</span>
@@ -547,98 +474,6 @@
           },
         });
         new Info().addTo(map);
-
-        function createAppearanceControl() {
-          const control = L.control({ position: 'topright' });
-          control.onAdd = () => {
-            const container = L.DomUtil.create('div', 'hud-panel appearance-panel');
-            container.innerHTML = `
-              <div class="panel-title">Appearance</div>
-              <label class="field">Skin
-                <select id="skinSelect">
-                  ${skinNames().map((name) => `<option value="${name}">${name}</option>`).join('')}
-                </select>
-              </label>
-              <div class="toggle-row">
-                <span>Grid</span>
-                <input type="checkbox" id="decorGrid" />
-              </div>
-              <div class="toggle-row">
-                <span>Scanlines</span>
-                <input type="checkbox" id="decorScanlines" />
-              </div>
-              <div class="toggle-row">
-                <span>Glow</span>
-                <input type="checkbox" id="decorGlow" />
-              </div>
-              <div class="appearance-status" data-role="appearance-status"></div>
-            `;
-            L.DomEvent.disableClickPropagation(container);
-            L.DomEvent.disableScrollPropagation(container);
-
-            const skinSelect = container.querySelector('#skinSelect');
-            const gridToggle = container.querySelector('#decorGrid');
-            const scanToggle = container.querySelector('#decorScanlines');
-            const glowToggle = container.querySelector('#decorGlow');
-            const statusLabel = container.querySelector('[data-role="appearance-status"]');
-
-            state.appearanceUI = { skinSelect, gridToggle, scanToggle, glowToggle, statusLabel };
-            updateAppearanceUI();
-
-            skinSelect.addEventListener('change', (ev) => {
-              const next = ev.target.value;
-              if (!next || state.safety === 'crit') {
-                if (state.safety === 'crit') {
-                  state.userSkin = next;
-                  persistSkin(next);
-                  updateAppearanceUI();
-                }
-                return;
-              }
-              applySkinAndDecor(next);
-            });
-
-            gridToggle.addEventListener('change', (ev) => {
-              setUserDecor({ grid: ev.target.checked });
-            });
-            scanToggle.addEventListener('change', (ev) => {
-              setUserDecor({ scanlines: ev.target.checked });
-            });
-            glowToggle.addEventListener('change', (ev) => {
-              setUserDecor({ glow: ev.target.checked });
-            });
-
-            return container;
-          };
-          control.addTo(map);
-        }
-
-        function updateAppearanceUI() {
-          const ui = state.appearanceUI;
-          if (!ui) {
-            return;
-          }
-          ui.skinSelect.value = state.userSkin;
-          ui.gridToggle.checked = !!state.userDecor.grid;
-          ui.scanToggle.checked = !!state.userDecor.scanlines;
-          ui.glowToggle.checked = !!state.userDecor.glow;
-
-          const forcedCrit = state.safety === 'crit';
-          const forcedWarn = state.safety === 'warn';
-
-          ui.skinSelect.disabled = forcedCrit;
-          ui.gridToggle.disabled = forcedCrit;
-          ui.scanToggle.disabled = forcedCrit || forcedWarn;
-          ui.glowToggle.disabled = forcedCrit || forcedWarn;
-
-          ui.gridToggle.classList.toggle('is-auto-disabled', forcedCrit && ui.gridToggle.checked && !state.decorEffective.grid);
-          ui.scanToggle.classList.toggle('is-auto-disabled', (forcedWarn || forcedCrit) && ui.scanToggle.checked && !state.decorEffective.scanlines);
-          ui.glowToggle.classList.toggle('is-auto-disabled', (forcedWarn || forcedCrit) && ui.glowToggle.checked && !state.decorEffective.glow);
-
-          updateAppearanceStatus(ui.statusLabel);
-        }
-
-        createAppearanceControl();
 
         const wsStatus = document.getElementById('wsStatus');
         const elClients = document.getElementById('cClients');
