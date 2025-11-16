@@ -12,19 +12,19 @@
 
   <!-- O: broken ring / open interface -->
   <circle cx="128" cy="128" r="86"
-          stroke="var(--violet)" stroke-width="18" stroke-linecap="round"
+          stroke="var(--violet, #5B2E90)" stroke-width="18" stroke-linecap="round"
           stroke-dasharray="420 110" stroke-dashoffset="55"/>
 
   <!-- I: sword (ISR ? action) -->
   <!-- Handle (above guard) -->
   <line x1="128" y1="68" x2="128" y2="102"
-        stroke="var(--violet)" stroke-width="10" stroke-linecap="round"/>
-  <!-- Guard (cross) — squared ends -->
+        stroke="var(--violet, #5B2E90)" stroke-width="10" stroke-linecap="round"/>
+  <!-- Guard (cross) - squared ends -->
   <line x1="108" y1="104" x2="148" y2="104"
-        stroke="var(--violet)" stroke-width="12" stroke-linecap="butt"/>
+        stroke="var(--violet, #5B2E90)" stroke-width="12" stroke-linecap="butt"/>
   <!-- Blade (below guard), sharpened tip -->
   <line x1="128" y1="108" x2="128" y2="182"
-        stroke="var(--violet)" stroke-width="18" stroke-linecap="butt"/>
+        stroke="var(--violet, #5B2E90)" stroke-width="18" stroke-linecap="butt"/>
   <!-- Triangular point -->
-  <path d="M119 182 L137 182 L128 196 Z" fill="var(--violet)"/>
+  <path d="M119 182 L137 182 L128 196 Z" fill="var(--violet, #5B2E90)"/>
 </svg>
