@@ -916,9 +916,11 @@ class ZMetaApp(ttk.Frame):
             self.map_widget.set_zoom(12)
 
     def _open_docs(self) -> None:
-        url = self._base_url() + "/docs/pipeline"
+        base = self._base_url()
+        urls = [f"{base}/docs/local", f"{base}/docs/pipeline"]
         try:
-            webbrowser.open(url, new=2)
+            for url in urls:
+                webbrowser.open(url, new=2)
         except Exception as exc:
             messagebox.showerror("Docs", f"Failed to open docs: {exc}")
 
@@ -1002,7 +1004,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
 
 
 

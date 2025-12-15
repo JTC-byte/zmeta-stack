@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import structlog
+
 from backend.app.config import settings
 
-log = logging.getLogger("zmeta.recorder")
+log = structlog.get_logger("zmeta.recorder")
 
 
 class NDJSONRecorder:
@@ -52,7 +53,10 @@ class NDJSONRecorder:
             self.queue.put_nowait(line)
         except asyncio.QueueFull:
             self.dropped_total += 1
-            log.warning("recorder queue full; dropping entry", extra={"dropped": self.dropped_total})
+            log.warning(
+                "recorder queue full; dropping entry",
+                dropped=self.dropped_total,
+            )
             return
         await asyncio.sleep(0)
 
@@ -74,9 +78,13 @@ class NDJSONRecorder:
             try:
                 if datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc) < cutoff:
                     path.unlink()
-                    log.info("Removed recorder file %s (older than %.1f h)", path.name, self.max_age)
-            except Exception as exc:
-                log.warning("Failed pruning %s: %s", path, exc)
+                    log.info(
+                        "Removed recorder file older than retention",
+                        file=path.name,
+                        retention_hours=self.max_age,
+                    )
+            except Exception:
+                log.exception("Failed pruning recorder file", path=str(path))
 
     async def _run(self) -> None:
         while True:

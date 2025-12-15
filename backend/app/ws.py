@@ -1,17 +1,17 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, List
 
+import structlog
 from fastapi import WebSocket
 
 from .config import WS_QUEUE_MAX
 from .metrics import metrics
 
-log = logging.getLogger('zmeta.ws')
+log = structlog.get_logger("zmeta.ws")
 
 
 @dataclass
@@ -60,12 +60,12 @@ class WSHub:
                 await asyncio.wait_for(queue.put(message), timeout=self.queue_put_timeout)
                 self._drop_counts.pop(ws, None)
             except asyncio.TimeoutError:
-                await self._handle_backpressure(ws, client, message, reason='put-timeout')
+                await self._handle_backpressure(ws, client, message, reason="put-timeout")
             except asyncio.CancelledError:
                 raise
             except Exception:
-                log.exception('Unexpected error queuing WS broadcast for %s', self._client_label(ws))
                 metrics.note_ws_dropped()
+                log.exception("Unexpected error queuing WS broadcast", client=self._client_label(ws))
                 await self.disconnect(ws)
 
     async def _handle_backpressure(
@@ -82,12 +82,12 @@ class WSHub:
         self._drop_counts[websocket] = drop_count
         queue_size = queue.qsize()
         log.warning(
-            'WS backpressure detected (client=%s reason=%s queue=%s/%s drops=%s)',
-            self._client_label(websocket),
-            reason,
-            queue_size,
-            queue.maxsize,
-            drop_count,
+            "WS backpressure detected",
+            client=self._client_label(websocket),
+            reason=reason,
+            queue_size=queue_size,
+            queue_max=queue.maxsize,
+            drops=drop_count,
         )
         with contextlib.suppress(asyncio.QueueEmpty):
             queue.get_nowait()
@@ -95,18 +95,18 @@ class WSHub:
             queue.put_nowait(message)
         except asyncio.QueueFull:
             log.warning(
-                'WS queue saturated; disconnecting slow client %s (queue=%s/%s)',
-                self._client_label(websocket),
-                queue.qsize(),
-                queue.maxsize,
+                "WS queue saturated; disconnecting slow client",
+                client=self._client_label(websocket),
+                queue_size=queue.qsize(),
+                queue_max=queue.maxsize,
             )
             await self.disconnect(websocket)
             return
         if drop_count >= self.max_backpressure_retries:
             log.warning(
-                'WS backpressure threshold reached; closing client %s (drops=%s)',
-                self._client_label(websocket),
-                drop_count,
+                "WS backpressure threshold reached; closing client",
+                client=self._client_label(websocket),
+                drops=drop_count,
             )
             await self.disconnect(websocket)
 
@@ -122,19 +122,37 @@ class WSHub:
         except asyncio.CancelledError:
             pass
         except Exception:
-            client = getattr(websocket, 'client', None)
-            log.exception('WebSocket sender error for %s', client)
+            client = getattr(websocket, "client", None)
+            log.exception("WebSocket sender error", client=client)
         finally:
             if websocket in self._clients:
                 await self.disconnect(websocket, cancel_sender=False)
 
+    def stats(self) -> dict[str, object]:
+        clients: List[dict[str, object]] = []
+        for ws, client in self._clients.items():
+            clients.append(
+                {
+                    "client": self._client_label(ws),
+                    "queue_size": client.queue.qsize(),
+                    "queue_max": client.queue.maxsize,
+                    "drops": self._drop_counts.get(ws, 0),
+                }
+            )
+        return {
+            "clients_total": len(self._clients),
+            "drops_total": sum(self._drop_counts.values()),
+            "max_queue": WS_QUEUE_MAX,
+            "clients": clients,
+        }
+
     @staticmethod
     def _client_label(websocket: WebSocket) -> str:
-        client = getattr(websocket, 'client', None)
+        client = getattr(websocket, "client", None)
         if not client:
-            return 'unknown'
+            return "unknown"
         host, port = client
-        return f'{host}:{port}'
+        return f"{host}:{port}"
 
 
 hub = WSHub()

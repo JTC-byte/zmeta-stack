@@ -1,8 +1,8 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-import logging
 from typing import Any
 
+import structlog
 from pydantic import ValidationError
 
 from schemas.zmeta import ZMeta, parse_zmeta
@@ -11,7 +11,7 @@ from tools.ingest_adapters import adapt_to_zmeta
 from .json_utils import dumps
 from .services import Services, get_services
 
-log = logging.getLogger('zmeta.ingest')
+log = structlog.get_logger("zmeta.ingest")
 
 
 def resolve_services(services: Services | None = None) -> Services:
@@ -23,7 +23,7 @@ def resolve_services(services: Services | None = None) -> Services:
 def validate_or_adapt(payload: dict, services: Services | None = None) -> ZMeta:
     svc = resolve_services(services)
     metrics = svc.metrics
-    adapter_name = 'native'
+    adapter_name = "native"
     try:
         zmeta_obj = parse_zmeta(payload)
     except ValidationError:
@@ -34,7 +34,7 @@ def validate_or_adapt(payload: dict, services: Services | None = None) -> ZMeta:
         zmeta_obj = parse_zmeta(adapted_payload)
 
     if zmeta_obj.sequence is None:
-        zmeta_obj = zmeta_obj.model_copy(update={'sequence': metrics.next_sequence()})
+        zmeta_obj = zmeta_obj.model_copy(update={"sequence": metrics.next_sequence()})
 
     metrics.note_adapter(adapter_name)
     return zmeta_obj
@@ -51,7 +51,7 @@ async def dispatch_zmeta(z: ZMeta, *, context: str, services: Services | None = 
     try:
         alerts = svc.rules.apply(data_dict)
     except Exception:
-        log.exception('rules.apply failed (%s)', context)
+        log.exception("rules.apply failed", context=context)
         return
 
     await publish_alerts(alerts, services=svc)
@@ -73,9 +73,9 @@ async def ingest_payload(payload: dict, *, context: str, services: Services | No
 
 
 __all__ = [
-    'dispatch_zmeta',
-    'ingest_payload',
-    'publish_alerts',
-    'resolve_services',
-    'validate_or_adapt',
+    "dispatch_zmeta",
+    "ingest_payload",
+    "publish_alerts",
+    "resolve_services",
+    "validate_or_adapt",
 ]

@@ -1,11 +1,14 @@
 ﻿# backend/app/main.py
 from __future__ import annotations
 
-import logging
-
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+from .logging_config import configure_logging
+
+configure_logging()
 
 from schemas.zmeta import ZMeta
 from tools.recorder import recorder
@@ -27,7 +30,7 @@ from .metrics import metrics
 from .state import AlertDeduper, deduper
 from .ws import hub
 
-log = logging.getLogger('zmeta')
+log = structlog.get_logger('zmeta')
 
 _app_title = APP_TITLE
 
@@ -68,5 +71,3 @@ __all__ = [
     'rules',
     'metrics',
 ]
-
-

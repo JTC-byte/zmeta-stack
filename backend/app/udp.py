@@ -1,15 +1,15 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import json
-import logging
 
+import structlog
 from pydantic import ValidationError
 
 from .ingest import ingest_payload
 from .metrics import metrics
 
-log = logging.getLogger('zmeta.udp')
+log = structlog.get_logger("zmeta.udp")
 
 
 class UDPProtocol(asyncio.DatagramProtocol):
@@ -19,15 +19,15 @@ class UDPProtocol(asyncio.DatagramProtocol):
     def datagram_received(self, data: bytes, addr) -> None:  # type: ignore[override]
         metrics.note_received()
         try:
-            text = data.decode('utf-8', errors='ignore').strip()
+            text = data.decode("utf-8", errors="ignore").strip()
             if text:
                 self.queue.put_nowait(text)
         except asyncio.QueueFull:
             metrics.note_dropped()
-            log.warning('UDP queue full; dropping packet from %s', addr)
+            log.warning("UDP queue full; dropping packet", client=addr)
         except Exception:
             metrics.note_dropped()
-            log.exception('Failed to process UDP datagram from %s', addr)
+            log.exception("Failed to process UDP datagram", client=addr)
 
 
 async def udp_consumer(queue: asyncio.Queue) -> None:
@@ -37,20 +37,20 @@ async def udp_consumer(queue: asyncio.Queue) -> None:
             try:
                 payload = json.loads(raw)
                 try:
-                    await ingest_payload(payload, context='udp')
+                    await ingest_payload(payload, context="udp")
                 except ValidationError:
                     metrics.note_dropped()
                     continue
             except Exception:
                 metrics.note_dropped()
                 snippet = raw if isinstance(raw, str) else repr(raw)
-                log.exception('Failed to process UDP payload (truncated): %s', snippet[:200])
+                log.exception("Failed to process UDP payload", snippet=snippet[:200])
             finally:
                 queue.task_done()
     except asyncio.CancelledError:
         pass
     except Exception:
-        log.exception('UDP consumer crashed')
+        log.exception("UDP consumer crashed")
 
 
-__all__ = ['UDPProtocol', 'udp_consumer']
+__all__ = ["UDPProtocol", "udp_consumer"]

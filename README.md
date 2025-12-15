@@ -92,6 +92,14 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/ingest" -Method POST -Conte
 You should see a marker near **[35.271, -78.637]** (info markers = blue, warn = orange, crit = red).
 (blue=info, orange=warn, red=crit).
 
+**F) Phone tracker adapter (mobile HTTP POST)**
+- Build a Shortcut/Tasker workflow that POSTs the lightweight schema described in `docs/phone_tracker_adapter.md`.
+- Set `source_format="phone_tracker_v1"` and include `timestamp`, `lat`, and `lon`. The adapter handles the rest and the UI paints the track/alerts purple.
+
+**G) Browser-based phone tracker client**
+- Browse to `http://<laptop-ip>:8000/ui/phone_tracker_client.html` from your phone (same LAN).  
+- Accept the location prompt and tap “Send Fix” or start auto mode—no extra apps required.
+
 ---
 
 ## Quick start (macOS / Linux)

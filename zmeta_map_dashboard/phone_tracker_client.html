@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ZMeta Phone Tracker Client</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #0f1116;
+      color: #e9edf4;
+      margin: 0;
+      padding: 32px 20px;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.4rem;
+    }
+    header p {
+      margin: 6px 0 0;
+      color: #a4afc6;
+      font-size: 0.95rem;
+    }
+    .panel {
+      background: rgba(20, 26, 35, 0.9);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    label {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #9fb3d0;
+    }
+    input, textarea {
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(10, 12, 18, 0.85);
+      color: #fff;
+      font-size: 1rem;
+      padding: 10px 12px;
+      width: 100%;
+    }
+    input:focus, textarea:focus {
+      outline: 2px solid #6d77ff;
+    }
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font-size: 1rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: transform 0.15s ease, filter 0.15s ease;
+    }
+    button.primary {
+      background: linear-gradient(120deg, #6c5ce7, #8e7dff);
+      color: #fff;
+    }
+    button.secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #e9edf4;
+    }
+    button:active {
+      transform: scale(0.98);
+    }
+    .status {
+      font-size: 0.95rem;
+      color: #9fb3d0;
+      min-height: 1.5em;
+    }
+    .status.ok {
+      color: #5fd4a0;
+    }
+    .status.error {
+      color: #ff7b7b;
+    }
+    .log {
+      font-family: "JetBrains Mono", "SFMono-Regular", Consolas, monospace;
+      font-size: 0.9rem;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 12px;
+      border-radius: 10px;
+      min-height: 90px;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      line-height: 1.35;
+    }
+    footer {
+      font-size: 0.85rem;
+      color: #7e8dac;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Phone Tracker Client</h1>
+    <p>Tap “Send Fix” to share your current GPS position with the ZMeta backend.</p>
+  </header>
+
+  <section class="panel">
+    <div class="field">
+      <label for="base-url">Backend URL</label>
+      <input id="base-url" type="url" placeholder="http://127.0.0.1:8000" />
+    </div>
+    <div class="field">
+      <label for="device-id">Device ID</label>
+      <input id="device-id" type="text" placeholder="jt-phone" />
+    </div>
+    <div class="field">
+      <label for="shared-secret">Shared Secret (optional)</label>
+      <input id="shared-secret" type="text" placeholder="X-ZMETA-SECRET header" />
+    </div>
+    <div class="field">
+      <label for="note">Note / Tag</label>
+      <input id="note" type="text" placeholder="e.g., patio test" />
+    </div>
+    <div class="field">
+      <label for="last-json">Last payload</label>
+      <div class="log" id="last-json">No payload sent yet.</div>
+    </div>
+    <div class="field status" id="status">Waiting…</div>
+    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+      <button class="primary" id="send-once">Send Fix</button>
+      <button class="secondary" id="start-loop">Start Auto</button>
+      <button class="secondary" id="stop-loop" disabled>Stop Auto</button>
+    </div>
+  </section>
+
+  <footer>
+    Location never leaves your browser except for the POST to the backend you specify above.
+  </footer>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const statusEl = $("status");
+    const lastJsonEl = $("last-json");
+    const baseUrlEl = $("base-url");
+    const deviceEl = $("device-id");
+    const secretEl = $("shared-secret");
+    const noteEl = $("note");
+    const sendBtn = $("send-once");
+    const startBtn = $("start-loop");
+    const stopBtn = $("stop-loop");
+
+    const STORAGE_KEY = "zmeta-phone-tracker-config";
+
+    function loadConfig() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+        baseUrlEl.value = stored.baseUrl || "";
+        deviceEl.value = stored.deviceId || "jt-phone";
+        secretEl.value = stored.secret || "";
+        noteEl.value = stored.note || "";
+      } catch {
+        /* ignore */
+      }
+    }
+
+    function saveConfig() {
+      const data = {
+        baseUrl: baseUrlEl.value.trim(),
+        deviceId: deviceEl.value.trim(),
+        secret: secretEl.value.trim(),
+        note: noteEl.value.trim(),
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    loadConfig();
+    [baseUrlEl, deviceEl, secretEl, noteEl].forEach((el) => {
+      el.addEventListener("change", saveConfig);
+    });
+
+    function setStatus(message, kind) {
+      statusEl.textContent = message;
+      statusEl.className = `field status ${kind || ""}`;
+    }
+
+    function logPayload(payload) {
+      lastJsonEl.textContent = JSON.stringify(payload, null, 2);
+    }
+
+    async function sendFix() {
+      const baseUrl = baseUrlEl.value.trim().replace(/\/+$/, "");
+      if (!baseUrl) {
+        setStatus("Enter the backend base URL first.", "error");
+        return;
+      }
+
+      setStatus("Requesting location…");
+      try {
+        const position = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 2000,
+          });
+        });
+        const { coords } = position;
+        const payload = {
+          source_format: "phone_tracker_v1",
+          device_id: deviceEl.value.trim() || "jt-phone",
+          timestamp: new Date().toISOString(),
+          lat: coords.latitude,
+          lon: coords.longitude,
+          alt_m: Number.isFinite(coords.altitude) ? coords.altitude : undefined,
+          speed_mps: Number.isFinite(coords.speed) ? coords.speed : undefined,
+          heading_deg: Number.isFinite(coords.heading) ? coords.heading : undefined,
+          accuracy_m: Number.isFinite(coords.accuracy) ? coords.accuracy : undefined,
+          note: noteEl.value.trim() || undefined,
+        };
+        logPayload(payload);
+
+        setStatus("Sending to backend…");
+        const headers = { "Content-Type": "application/json" };
+        const secret = secretEl.value.trim();
+        if (secret) {
+          headers["X-ZMETA-SECRET"] = secret;
+        }
+
+        const resp = await fetch(`${baseUrl}/api/v1/ingest`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(payload),
+        });
+        if (!resp.ok) {
+          const errText = await resp.text();
+          throw new Error(`${resp.status} ${resp.statusText}: ${errText}`);
+        }
+        const data = await resp.json().catch(() => ({}));
+        setStatus(`Sent! Broadcast to ${data.broadcast_to ?? "?"} clients.`, "ok");
+      } catch (err) {
+        console.error(err);
+        setStatus(err.message || "Failed to send location.", "error");
+      }
+    }
+
+    let intervalId = null;
+    function startLoop() {
+      if (intervalId) {
+        return;
+      }
+      sendFix();
+      intervalId = setInterval(sendFix, 10000);
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      setStatus("Auto-send every 10 seconds…", "ok");
+    }
+    function stopLoop() {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      setStatus("Auto mode stopped.", "");
+    }
+
+    sendBtn.addEventListener("click", sendFix);
+    startBtn.addEventListener("click", startLoop);
+    stopBtn.addEventListener("click", stopLoop);
+  </script>
+</body>
+</html>

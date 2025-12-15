@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import logging
 from typing import AsyncIterator
 
+import structlog
 from fastapi import FastAPI
 
 from tools.recorder import recorder
@@ -13,7 +13,7 @@ from tools.rules import rules
 from .config import UDP_HOST, UDP_PORT, UDP_QUEUE_MAX, ui_url
 from .udp import UDPProtocol, udp_consumer
 
-log = logging.getLogger('zmeta.lifespan')
+log = structlog.get_logger("zmeta.lifespan")
 
 
 @contextlib.asynccontextmanager
@@ -32,9 +32,12 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.udp_transport = transport
     app.state.udp_consumer_task = asyncio.create_task(udp_consumer(queue))
 
-    print(f"\nLive map:  {ui_url('/ui/live_map.html')}")
-    print(f"WS test:   {ui_url('/ui/ws_test.html')}")
-    print(f"Health:    {ui_url('/healthz')}\n")
+    log.info(
+        "service endpoints ready",
+        live_map=ui_url('/ui/live_map.html'),
+        ws_test=ui_url('/ui/ws_test.html'),
+        health=ui_url('/healthz'),
+    )
 
     try:
         yield
@@ -50,7 +53,7 @@ async def app_lifespan(app: FastAPI) -> AsyncIterator[None]:
             except asyncio.CancelledError:
                 pass
             except Exception:
-                log.exception('UDP consumer task shutdown failed')
+                log.exception("UDP consumer task shutdown failed")
         await recorder.stop()
 
 

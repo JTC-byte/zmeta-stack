@@ -1,11 +1,18 @@
-﻿from __future__ import annotations
 """Evaluate YAML-defined rules with cooldowns and polygon AOIs."""
+
+from __future__ import annotations
+
+import time
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from collections import Counter
-import time
+
+import structlog
 import yaml
+
+log = structlog.get_logger("zmeta.rules")
+
 
 @dataclass
 class Condition:
@@ -17,6 +24,7 @@ class Condition:
     lte: Optional[float] = None
     polygon: Optional[List[Tuple[float, float]]] = None  # [(lat, lon), ...]
 
+
 @dataclass
 class Rule:
     name: str
@@ -27,6 +35,7 @@ class Rule:
     any_match: bool = False  # if True: OR; else AND
     cooldown_seconds: Optional[float] = None
 
+
 def _get_field(obj: Dict[str, Any], path: str) -> Any:
     cur = obj
     for part in path.split("."):
@@ -34,6 +43,7 @@ def _get_field(obj: Dict[str, Any], path: str) -> Any:
             return None
         cur = cur[part]
     return cur
+
 
 def _point_from_value(value: Any, root: Dict[str, Any], field_path: str) -> Optional[Tuple[float, float]]:
     if isinstance(value, dict):
@@ -46,6 +56,7 @@ def _point_from_value(value: Any, root: Dict[str, Any], field_path: str) -> Opti
     if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
         return float(lat), float(lon)
     return None
+
 
 def _point_in_polygon(point: Tuple[float, float], polygon: List[Tuple[float, float]]) -> bool:
     if len(polygon) < 3:
@@ -61,6 +72,7 @@ def _point_in_polygon(point: Tuple[float, float], polygon: List[Tuple[float, flo
         if intersects:
             inside = not inside
     return inside
+
 
 def _cond_ok(cond: Condition, value: Any, root: Dict[str, Any]) -> bool:
     if cond.eq is not None:
@@ -90,6 +102,7 @@ def _cond_ok(cond: Condition, value: Any, root: Dict[str, Any]) -> bool:
             return False
         return _point_in_polygon(point, [(float(lat), float(lon)) for lat, lon in cond.polygon])
     return False
+
 
 class RuleSet:
     def __init__(self, rules: List[Rule]):
@@ -164,7 +177,15 @@ class RuleSet:
                 }
             )
             self.fire_counts[r.name] += 1
+            log.info(
+                "rule fired",
+                rule=r.name,
+                severity=r.severity,
+                sensor_id=z.get("sensor_id"),
+                modality=z.get("modality"),
+            )
         return alerts
+
 
 class Rules:
     def __init__(self, path: str | Path = "config/rules.yaml"):
@@ -176,6 +197,7 @@ class Rules:
             self.set = RuleSet.from_yaml(self.path)
         else:
             self.set = RuleSet([])
+        log.info("rules loaded", rules=len(self.set.rules), path=str(self.path))
 
     def apply(self, z: Dict[str, Any]) -> List[Dict[str, Any]]:
         return self.set.eval(z)
@@ -183,6 +205,5 @@ class Rules:
     def fire_counts(self) -> Dict[str, int]:
         return dict(self.set.fire_counts)
 
+
 rules = Rules()
-
-

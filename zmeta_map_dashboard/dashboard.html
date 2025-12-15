@@ -17,10 +17,37 @@
       margin: 0;
       padding: 0;
     }
+
+    .docs-fab {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 900;
+      text-decoration: none;
+      font-family: "Segoe UI", "Inter", sans-serif;
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: 0.02em;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(25, 28, 35, 0.82);
+      color: #e8edf3;
+      border: 1px solid rgba(91, 46, 144, 0.45);
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.24);
+      backdrop-filter: blur(8px);
+      transition: transform 140ms ease, background 140ms ease, border-color 140ms ease;
+    }
+
+    .docs-fab:hover {
+      transform: translateY(-1px);
+      background: rgba(35, 40, 50, 0.9);
+      border-color: rgba(91, 46, 144, 0.7);
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <a class="docs-fab" href="/docs/local" target="_blank" rel="noreferrer">Docs</a>
 
   <!-- Leaflet JS (no integrity) -->
   <script

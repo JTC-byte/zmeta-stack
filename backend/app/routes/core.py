@@ -20,8 +20,20 @@ health_router = APIRouter(prefix='/healthz', tags=['status'])
 
 
 @status_router.get('')
-def api_status(hub: WSHub = Depends(get_ws_hub)) -> Dict[str, object]:
-    return {'status': f'{APP_TITLE} running', 'clients': len(hub.clients)}
+def api_status(
+    hub: WSHub = Depends(get_ws_hub),
+    metrics: MetricsProvider = Depends(get_metrics),
+) -> Dict[str, object]:
+    snapshot = metrics.snapshot()
+    ws_stats = hub.stats()
+    return {
+        'status': f'{APP_TITLE} running',
+        'clients': ws_stats['clients_total'],
+        'adapter_counts': snapshot.adapter_counts,
+        'udp_received_total': snapshot.udp_received_total,
+        'validated_total': snapshot.validated_total,
+        'ws': ws_stats,
+    }
 
 
 @health_router.get('')
@@ -31,6 +43,7 @@ async def healthz(
     auth_enabled: bool = Depends(get_auth_enabled),
 ) -> Dict[str, object]:
     snapshot = metrics.snapshot()
+    ws_stats = hub.stats()
     return {
         'status': 'ok',
         'clients': len(hub.clients),
@@ -44,6 +57,8 @@ async def healthz(
         'ws_queue_max': WS_QUEUE_MAX,
         'ws_sent_total': snapshot.ws_sent_total,
         'ws_dropped_total': snapshot.ws_dropped_total,
+        'adapter_counts': snapshot.adapter_counts,
+        'ws': ws_stats,
         'auth_mode': 'shared_secret' if auth_enabled else 'disabled',
         'auth_header': AUTH_HEADER if auth_enabled else None,
         'allowed_origins': ALLOWED_ORIGINS,

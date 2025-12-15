@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import logging
 from typing import Callable, Optional
 
+import structlog
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 
 from ..config import WS_GREETING
@@ -14,7 +14,7 @@ from ..dependencies import (
 )
 from ..ws import WSHub
 
-log = logging.getLogger('zmeta')
+log = structlog.get_logger("zmeta.ws")
 
 router = APIRouter()
 
@@ -40,10 +40,10 @@ async def websocket_endpoint(
             await websocket.send_text(f'Echo: {data}')
     except WebSocketDisconnect:
         client = getattr(websocket, 'client', None)
-        log.debug('WebSocket disconnected: %s', client)
+        log.debug("WebSocket disconnected", client=client)
     except Exception:
         client = getattr(websocket, 'client', None)
-        log.exception('Unhandled websocket error for %s', client)
+        log.exception("Unhandled websocket error", client=client)
     finally:
         await hub.disconnect(websocket)
 

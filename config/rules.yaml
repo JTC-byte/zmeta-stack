@@ -36,3 +36,13 @@ rules:
         in: ["rf"]
       - field: "confidence"
         gte: 0.9
+
+  - name: phone_tracker_fix
+    enabled: true
+    severity: phone
+    message: "Phone tracker position update"
+    conditions:
+      - field: "data.type"
+        eq: "phone_geo_fix"
+      - field: "source_format"
+        eq: "phone_tracker_v1"
